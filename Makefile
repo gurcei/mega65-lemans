@@ -7,6 +7,7 @@ AS = 64tass
 DEBUGGER = c64debugger
 X64SC = x64sc
 C1541 = c1541
+XEMU = /c/projs/xemu/build/bin/xmega65.native
 
 all: crt
 
@@ -18,8 +19,9 @@ lemans: src/lemans.asm src/charset-f800-f97f.bin src/sprites-f980-f9ff.bin src/c
 lemans-stub: src/lemans_stub.asm
 	64tass -Wall -Werror --cbm-prg -o bin/lemans_stub.prg -L bin/list.txt -l bin/labels.txt --vice-labels src/lemans_stub.asm
 
-lemans-mega65 : src/lemans_stub.asm src/lemans.asm src/charset-f800-f97f.bin src/sprites-f980-f9ff.bin src/charset-fa00-fcbf.bin src/sprites-fcc0-ffbf.bin
-	64
+lemans-mega65 : lemans lemans-stub
+	dd if=bin/lemans.prg of=bin/lemans.bin skip=2 bs=1
+	cat bin/lemans_stub.prg bin/lemans.bin > bin/lemans-mega65.prg
 
 crt: lemans
 	dd if=bin/lemans.prg of=bin/lemans.bin skip=2 bs=1
@@ -56,7 +58,7 @@ d64: intro-exo
 	$(C1541) $(D64_IMAGE) -list
 
 run: lemans-stub lemans-mega65
-	$(XEMU) bin/lemans-mega65.prg
+	$(XEMU) -prg bin/lemans-mega65.prg
 
 debug: lemans-lia-exo
 	$(DEBUGGER) -d64 $(D64_IMAGE) -symbols bin/labels.txt
