@@ -15,6 +15,12 @@ lemans: src/lemans.asm src/charset-f800-f97f.bin src/sprites-f980-f9ff.bin src/c
 	acme --cpu m65 -v4 -l bin/lemans.sym -r bin/lemans.rep src/lemans.asm
 	md5sum bin/lemans.prg orig/lemans.prg
 
+lemans-stub: src/lemans_stub.asm
+	64tass -Wall -Werror --cbm-prg -o bin/lemans_stub.prg -L bin/list.txt -l bin/labels.txt --vice-labels src/lemans_stub.asm
+
+lemans-mega65 : src/lemans_stub.asm src/lemans.asm src/charset-f800-f97f.bin src/sprites-f980-f9ff.bin src/charset-fa00-fcbf.bin src/sprites-fcc0-ffbf.bin
+	64
+
 crt: lemans
 	dd if=bin/lemans.prg of=bin/lemans.bin skip=2 bs=1
 	cat orig/crt_header_ultimax.bin bin/lemans.bin > bin/lemans.crt
@@ -49,8 +55,8 @@ d64: intro-exo
 	$(C1541) $(D64_IMAGE) -write bin/intro-exo.prg "lemans"
 	$(C1541) $(D64_IMAGE) -list
 
-run: d64
-	$(X64) $(D64_IMAGE)
+run: lemans-stub lemans-mega65
+	$(XEMU) bin/lemans-mega65.prg
 
 debug: lemans-lia-exo
 	$(DEBUGGER) -d64 $(D64_IMAGE) -symbols bin/labels.txt
