@@ -2,7 +2,7 @@
 .PHONY: all clean run
 
 D64_IMAGE = "bin/lemans-lia.d64"
-X64 = x64
+X64 = export GSETTINGS_SCHEMA_DIR=/c/Users/gurce/Downloads/GTK3VICE-3.9-win64/share/glib-2.0/schemas ; x64sc
 AS = 64tass
 DEBUGGER = c64debugger
 X64SC = x64sc
