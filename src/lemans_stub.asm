@@ -1,17 +1,17 @@
-// ======================
-// BASIC STUB FOR SEAWOLF
-// ======================
+; ======================
+; BASIC STUB FOR SEAWOLF (TASS64 VERSION)
+; ======================
 
 * = $0801
 
-// BASIC Stub
-  !word basic_end   // pointer to next basic line
-  !word $0a         // line 10
-  !byte $9e         // 'SYS' command
-  !text "2061"      // '2061'
-  !byte $00         // end of current basic line
+; BASIC Stub
+  .word basic_end    ; pointer to next basic line
+  .word $000a        ; line 10
+  .byte $9e          ; 'SYS' command
+  .text "2061"       ; '2061'
+  .byte $00          ; end of current basic line
 basic_end:
-  !word $00         // end of basic program
+  .word $0000        ; end of basic program
 
 initialise:
     ; switch kernal rom off
@@ -43,7 +43,7 @@ initialise:
 
     jsr copy_chunk
 
-    ; copy $F000-$FFFF to $3000-$3FFF (to mirror ultimax mirroring behaviour)
+    ; copy $F000-$FFFF to $3000-$3FFF (mirror ultimax behaviour)
 
     ; $02 word ptr holds SOURCE address of copy
     lda #$00
@@ -66,15 +66,15 @@ initialise:
     jsr copy_chunk
 
     ; assure any prior CIA IRQ is cleared (so no endless loops)
-    LDA  $DC0D  ; prevent some endless irq quirk I saw in vice
+    lda  $dc0d  ; prevent some endless irq quirk I saw in vice
 
-    ; now start up the cartridge!
-    ; --------------------------
-    jmp ($FFFC)   ; cold start handler
+    ; jump to reset vector (i.e., now start up the cartridge!)
+    jmp ($fffc)   ; cold start handler
 
 
 copy_chunk:
     ldy #$00
+
     lda ($02),y   ; get source byte
     sta ($04),y   ; write to dest addr
 
@@ -93,22 +93,22 @@ dec_high_byte_too:
     ora $06   ; if both are zero, time to finish
 
 continue_copy:
-    ; increment src and dest ptrs
+    ; increment src
     inc $02
     lda $02
-    cmp #$00
-    bne +
+    bne skip_src_hi
     inc $03
-+
+skip_src_hi:
+
+    ; increment dest
     inc $04
     lda $04
-    cmp #$00
-    bne +
+    bne skip_dst_hi
     inc $05
-+
+skip_dst_hi:
+
     jmp copy_chunk
 
-//--------------------------------
 
 ;--------
 rom_start:
