@@ -304,7 +304,7 @@ START:
         DEX
         BPL ._L00
 
-.IF USE_PRG == 0
+!if USE_PRG = 0 {
         ; Init MEGA65
         ; -----------
 
@@ -312,8 +312,17 @@ START:
         sta $d02f
         lda #$53
         sta $d02f                       ; knock-knock for MEGA65-IO personality
-        lda $d054
 
+        lda $d031
+        ora #%01000000
+        sta $d031                       ; turn on FAST flag (3.5 MHz)
+					; NOTE: This resets the $d058 byte-width value
+
+        lda $d054
+        ora #%01000000                  ; turn on VFAST flag (40 MHz) (needs FAST flag on too to work)
+        sta $d054
+
+        lda $d054
         ora #%00000101
         sta $d054                       ; set SEAM mode CHR16 + FCLRHI
 
@@ -324,7 +333,8 @@ START:
 
         lda #(WIDTH / 2)
         sta $d05e                       ; store char-width
-.ENDIF
+
+}
 
         ; Init CIA
         LDA #$7F                        ;Clear interrupt flags
@@ -796,18 +806,28 @@ PRINT_TITLE_SCREEN:
 
         LDX #$00
 ._L00   STX ZP_LEVEL_IDX
-        JSR DRAW_ROAD_TOP_ROW
+        ; JSR DRAW_ROAD_TOP_ROW
 
         LDX ZP_LEVEL_IDX                ;Index of row to print
         LDY TITLE_ROWS_TBL,X            ;Choose which row to print
         LDX #$00
 ._L01   LDA TITLE_MSG,Y
-        STA SCREEN_RAM+8,X
-        LDA #$03                        ;Cyan color
-        STA COLOR_RAM+8,X
+        STA SCREEN_RAM+16,X
+	
+		LDA #$00
+		STA COLOR_RAM+16,X	; null out extra seam colour byte
+
         INY
         INX
-        CPX #16                         ;16 colums to draw per line
+
+		LDA #$00
+		STA SCREEN_RAM+16,X
+
+		LDA #$03                        ;Cyan color
+		STA COLOR_RAM+16,X
+
+	INX
+        CPX #32                         ;16 colums to draw per line
         BCC ._L01
 
         JSR SCROLL_DOWN
@@ -909,7 +929,9 @@ CLEAR_SCREEN_RAM:
 ._L00   STA SCREEN_RAM,Y
         STA SCREEN_RAM+$0100,Y
         STA SCREEN_RAM+$0200,Y
-        STA SCREEN_RAM+$02E8,Y
+        STA SCREEN_RAM+$0300,Y
+        STA SCREEN_RAM+$0400,Y
+        STA SCREEN_RAM+$0500,Y
         INY
         BNE ._L00
         RTS
@@ -1123,18 +1145,18 @@ SPEED_MSG
 !zone {
 SCROLL_DOWN:
         ; Scroll down screen
-        LDY #31
+        LDY #31*2
 ._L00
         ; Screen RAM
         !for I, 23, 0 {
-        LDA SCREEN_RAM+40*I,Y
-        STA SCREEN_RAM+40*(I+1),Y
+        LDA SCREEN_RAM + WIDTH * I,Y
+        STA SCREEN_RAM + WIDTH * (I+1),Y
         }
 
         ; Color RAM
         !for I, 23, 0 {
-        LDA COLOR_RAM+40*I,Y
-        STA COLOR_RAM+40*(I+1),Y
+          ; LDA COLOR_RAM + WIDTH * I,Y
+          ; STA COLOR_RAM + WIDTH * (I+1),Y
         }
 
         DEY
