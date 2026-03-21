@@ -852,6 +852,16 @@ PRINT_TITLE_SCREEN:
         DEX
         BPL ._L02
 
+        lda #$01
+        ldx #$01
+        ldy #$01
+_silly
+        jsr DrawChar
+        iny
+        inx
+        cpx #25
+        bne _silly
+
         ; Stay forever, until F1 is pressed from IRQ Handler
 ._L03   LDY #$14
         JSR DELAY_01
@@ -3777,6 +3787,113 @@ _L27    LDA #$0A
         STA $D408                       ;Voice 2: Frequency Control - High-Byte
 _L28    RTS
 }
+
+;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
+tmp1 .BYTE $00
+tmp_row_lo .BYTE $00
+tmp_row_hi .BYTE $00
+tmp_col .BYTE $00
+char_value .BYTE $00
+
+;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
+
+DrawChar_RowOffset:
+; input: Y = row
+; output: tmp_row_lo/tmp_row_hi = row * 80
+
+    ; Y * 80 = (Y * 5) * 16
+
+; tmp_row = Y * 80
+
+    tya
+    sta tmp1          ; Y
+
+    ; Y * 5 = Y + (Y * 4)
+
+    asl a             ; *2
+    asl a             ; *4
+    clc
+    adc tmp1          ; Y*5
+
+    ; now multiply by 16 (shift left 4)
+
+    sta tmp_row_lo
+    lda #0
+    sta tmp_row_hi
+
+    asl tmp_row_lo
+    rol tmp_row_hi
+    asl tmp_row_lo
+    rol tmp_row_hi
+    asl tmp_row_lo
+    rol tmp_row_hi
+    asl tmp_row_lo
+    rol tmp_row_hi
+
+    rts
+
+;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
+
+DrawChar:
+    ; A = char
+    ; X = col
+    ; Y = row
+
+    sta char_value
+
+    pha
+    txa
+    pha
+    tya
+    pha
+
+    ; ------------------------
+    ; calculate row offset
+    ; row * 80
+    ; ------------------------
+    jsr DrawChar_RowOffset
+
+
+    ; ------------------------
+    ; column offset (col * 2)
+    ; ------------------------
+
+    txa
+    asl a       ; *2
+    sta tmp_col
+
+    ; ------------------------
+    ; add together
+    ; ------------------------
+
+    clc
+    lda tmp_row_lo
+    adc tmp_col
+    sta ZP_TMP_PTR_LO
+
+    lda tmp_row_hi
+    adc #>SCREEN_RAM
+    sta ZP_TMP_PTR_HI
+
+    ; ------------------------
+    ; write character
+    ; ------------------------
+
+    ldy #0
+    lda char_value   ; or use A directly if preserved
+    sta (ZP_TMP_PTR_LO),y
+
+    iny
+    lda #0           ; attributes (safe default)
+    sta (ZP_TMP_PTR_LO),y
+
+    pla
+    tay
+    pla
+    tax
+    pla
+
+    rts
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 ; Garbage: Remove from .prg
