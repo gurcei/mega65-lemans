@@ -7,6 +7,8 @@
 ; by riq / L.I.A                                                               ;
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 
+WIDTH = 80
+
 ; Compile-time variables
 ; To compile the unmodified original game, all values must be 0
 
@@ -301,6 +303,28 @@ START:
         STA $D011,X                     ;VIC Control Register 1
         DEX
         BPL ._L00
+
+.IF USE_PRG == 0
+        ; Init MEGA65
+        ; -----------
+
+        lda #$47
+        sta $d02f
+        lda #$53
+        sta $d02f                       ; knock-knock for MEGA65-IO personality
+        lda $d054
+
+        ora #%00000101
+        sta $d054                       ; set SEAM mode CHR16 + FCLRHI
+
+        lda #(WIDTH & $ff)
+        sta $d058
+        lda #(WIDTH >> 8)
+        sta $d059                       ; store byte-width
+
+        lda #(WIDTH / 2)
+        sta $d05e                       ; store char-width
+.ENDIF
 
         ; Init CIA
         LDA #$7F                        ;Clear interrupt flags
