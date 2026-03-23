@@ -9,6 +9,15 @@
 
 WIDTH = 80
 
+OP_COPY = 0
+OP_MIX  = 1
+OP_SWAP = 2
+OP_FILL = 3
+OP_CHAIN = 4
+
+SRC_DEC = 16
+DST_DEC = 32
+
 MULTINA = $d770
 MULTINB = $d774
 MULTOUT = $d778
@@ -50,6 +59,25 @@ MULTOUT = $d778
 	stx .out+1
 	sta .out
 	plz
+}
+
+!macro edma .cmd, .length, .src_addr, .src_bank, .src_mb, .dst_addr, .dst_bank, .dst_mb {
+	!byte $06	// disable transparency
+  !byte $80 // src addr MB selector
+  !byte .src_mb // source megabyte
+	!byte $81	// dest addr MB selector
+	!byte .dst_mb	// destination megabyte
+	!byte $00	// end of options
+
+	!byte .cmd	// CMD = COPY + chain
+
+	!word .length	// length
+	!word .src_addr	// src addr = $54000
+	!byte .src_bank	// src bank = $05
+	!word .dst_addr	// dest addr = $54000
+	!byte .dst_bank	// dest bank = $05
+	!byte $00	// CMD msb (ignore)
+	!word $0000	// modulo (ignore)
 }
 
 ; Compile-time variables
@@ -845,6 +873,9 @@ TRAFFICLIGHT_SID_CONTROL_TBL
         !byte $10,$00,$00,$00
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
+xpos !byte $00
+ypos !byte $00
+;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 ; Initial screen, including the scrolling + animation
 ; Does not return (?)
 !zone {
@@ -854,29 +885,37 @@ PRINT_TITLE_SCREEN:
 
         LDX #$00
 ._L00   STX ZP_LEVEL_IDX
-        ; JSR DRAW_ROAD_TOP_ROW
+        JSR DRAW_ROAD_TOP_ROW
 
         LDX ZP_LEVEL_IDX                ;Index of row to print
         LDY TITLE_ROWS_TBL,X            ;Choose which row to print
+
+        lda #$08
+        sta xpos
+        lda #$00
+        sta ypos
+
         LDX #$00
+
 ._L01   LDA TITLE_MSG,Y
-        STA SCREEN_RAM+16,X
-	
-		LDA #$00
-		STA COLOR_RAM+16,X	; null out extra seam colour byte
-
-        INY
-        INX
-
-		LDA #$00
-		STA SCREEN_RAM+16,X
-
-		LDA #$03                        ;Cyan color
-		STA COLOR_RAM+16,X
-
-	INX
-        CPX #32                         ;16 colums to draw per line
-        BCC ._L01
+ 
+         phx
+         phy
+ 
+         ldx xpos
+         ldy ypos
+         ldz #$03        ; cyan colour
+         jsr DrawChar
+ 
+         ply
+         plx
+ 
+         INY
+         inc xpos
+ 
+ 	INX
+         CPX #16                         ;16 colums to draw per line
+         BCC ._L01
 
         JSR SCROLL_DOWN
         LDY #$02
@@ -900,16 +939,16 @@ PRINT_TITLE_SCREEN:
         DEX
         BPL ._L02
 
-        lda #$01
-        ldx #$01
-        ldy #$01
-        ldz #$02
-_silly
-        jsr DrawChar
-        iny
-        inx
-        cpx #25
-        bne _silly
+;        lda #$01
+;        ldx #$01
+;        ldy #$01
+;        ldz #$02
+;_silly
+;        jsr DrawChar
+;        iny
+;        inx
+;        cpx #25
+;        bne _silly
 
         ; Stay forever, until F1 is pressed from IRQ Handler
 ._L03   LDY #$14
@@ -984,15 +1023,22 @@ DELAY_01:
 ; Clears the screen RAM with register A
 !zone {
 CLEAR_SCREEN_RAM:
-        LDY #$00     ;#%00000000
-._L00   STA SCREEN_RAM,Y
-        STA SCREEN_RAM+$0100,Y
-        STA SCREEN_RAM+$0200,Y
-        STA SCREEN_RAM+$0300,Y
-        STA SCREEN_RAM+$0400,Y
-        STA SCREEN_RAM+$0500,Y
-        INY
-        BNE ._L00
+        lda #' '
+        ldy #$00
+        ldx #$00
+        ldz #$00
+
+-:
+        jsr DrawChar
+        inx
+        cpx #40
+        bne -
+        
+        ldx #$00
+        iny
+        cpy #25
+        bne -
+
         RTS
 }
 
@@ -1201,26 +1247,78 @@ SPEED_MSG
         !scr " speed  "
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
+COPY_SIZE = WIDTH * 24
+FIRST_SRC_BYTE = $0400 + WIDTH*24 - 1
+FIRST_CLR_SRC_BYTE = $ff80000 + WIDTH*24 - 1
+
 !zone {
 SCROLL_DOWN:
         ; Scroll down screen
-        LDY #31*2
-._L00
-        ; Screen RAM
-        !for I, 23, 0 {
-        LDA SCREEN_RAM + WIDTH * I,Y
-        STA SCREEN_RAM + WIDTH * (I+1),Y
-        }
+        LDY #31*2               ; this is actually the width to scroll (not height)
 
+        lda #(OP_COPY + SRC_DEC + DST_DEC)
+        sta dma_cmd
+
+        lda #<COPY_SIZE
+        sta dma_length
+        lda #>COPY_SIZE
+        sta dma_length + 1
+
+        lda #<FIRST_SRC_BYTE
+        sta dma_src_addr
+        lda #>FIRST_SRC_BYTE
+        sta dma_src_addr + 1
+
+        lda #$00
+        sta dma_src_bank
+        sta dma_src_mb
+
+        lda #<(FIRST_SRC_BYTE + WIDTH)
+        sta dma_dst_addr
+        lda #>(FIRST_SRC_BYTE + WIDTH)
+        sta dma_dst_addr + 1
+
+        lda #$00
+        sta dma_dst_bank
+        sta dma_dst_mb
+
+    lda #$00
+    sta $d702
+    lda #>dma_copy_line
+    sta $d701
+    lda #<dma_copy_line
+    sta $d705
+
+
+clrcpy:
         ; Color RAM
-        !for I, 23, 0 {
-          ; LDA COLOR_RAM + WIDTH * I,Y
-          ; STA COLOR_RAM + WIDTH * (I+1),Y
-        }
+	; ---------
+        lda #<FIRST_CLR_SRC_BYTE
+        sta dma_src_addr
+        lda #>FIRST_CLR_SRC_BYTE
+        sta dma_src_addr + 1
 
-        DEY
-        BMI ._L01
-        JMP ._L00
+        lda #$08
+        sta dma_src_bank
+	lda #$ff
+        sta dma_src_mb
+
+        lda #<(FIRST_CLR_SRC_BYTE + WIDTH)
+        sta dma_dst_addr
+        lda #>(FIRST_CLR_SRC_BYTE + WIDTH)
+        sta dma_dst_addr + 1
+
+        lda #$08
+        sta dma_dst_bank
+	lda #$ff
+        sta dma_dst_mb
+
+    lda #$00
+    sta $d702
+    lda #>dma_copy_line
+    sta $d701
+    lda #<dma_copy_line
+    sta $d705
 
         ; Scroll down "ROW" properties
 ._L01   LDY #23
@@ -1235,6 +1333,33 @@ SCROLL_DOWN:
 
         RTS
 }
+
+dma_copy_line:            ; length srcaddr srcbank srcmb dstaddr dstbank dstmb
+; +edma OP_COPY,            WIDTH, $0000,  $0,     $80,  $0000,  $3,     $00
+	!byte $06	// disable transparency
+	!byte $80 // src addr MB selector
+dma_src_mb:
+	!byte $00       // source megabyte
+	!byte $81	// dest addr MB selector
+dma_dst_mb:
+	!byte $00       // destination megabyte
+	!byte $00	// end of options
+
+dma_cmd:
+	!byte $00	// CMD = COPY + chain
+
+dma_length:
+	!word $0000	// length
+dma_src_addr:
+	!word $0000	// src addr = $54000
+dma_src_bank:
+	!byte $00	// src bank = $05
+dma_dst_addr:
+	!word $0000	// dest addr = $54000
+dma_dst_bank:
+	!byte $00	// dest bank = $05
+	!byte $00	// CMD msb (ignore)
+	!word $0000	// modulo (ignore)
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 ; Looks like a "random" number generator
@@ -3853,11 +3978,14 @@ in2 !word $0000
 DrawChar_RowOffset:
 ; input: Y = row
 ; output: tmp_row_lo/tmp_row_hi = row * 80
+    phx
 
     sty in1
     lda #80
     sta in2
     +multiply8 in1, in2, tmp_row_lo
+
+    plx
 
     rts
 
@@ -3878,10 +4006,6 @@ DrawChar:
     phz
 
         ; prepare CLR_PTR
-        lda #<COLOUR_BASE
-        sta CLR_PTR0
-	lda #>COLOUR_BASE
-        sta CLR_PTR1
         lda #^COLOUR_BASE
         sta CLR_PTR2
         lda #((COLOUR_BASE >> 24) & $FF)
