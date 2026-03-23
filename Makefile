@@ -11,7 +11,8 @@ C1541 = c1541
 all: crt
 
 lemans: src/lemans.asm src/charset-f800-f97f.bin src/sprites-f980-f9ff.bin src/charset-fa00-fcbf.bin src/sprites-fcc0-ffbf.bin
-	64tass -Wall -Werror --cbm-prg -o bin/lemans.prg -L bin/list.txt -l bin/labels.txt --vice-labels src/lemans.asm
+	# 64tass -Wall -Werror --cbm-prg -o bin/lemans.prg -L bin/list.txt -l bin/labels.txt --vice-labels src/lemans.asm
+	acme --cpu m65 -v4 -l bin/lemans.sym -r bin/lemans.rep src/lemans.asm
 	md5sum bin/lemans.prg orig/lemans.prg
 
 crt: lemans
