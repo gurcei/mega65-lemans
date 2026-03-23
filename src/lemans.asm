@@ -284,13 +284,19 @@ HI_SCORE_OFFSET = SCREEN_RAM + 40 * 8 + 32
 !if USE_PRG = 0 {
         * = $E000                       ;It is an 8Kb Ultimax cartridge.
 } else {
-        * = $0801
-        .WORD (+), 2022                 ;pointer, line number
-        .NULL $9E, FORMAT("%4d", START) ;will be "sys ${START}"
-+       .WORD 0                         ;basic line end
+        * = $2001
+        !word (+), 2022                 ;pointer, line number
+        ;!null $9E, FORMAT("%4d", START) ;will be "sys ${START}"
+                !byte $9E
+                !text "8205"
+                !byte $00
++       !word 0                         ;basic line end
 }
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
+BEGIN
+        jmp START
+
 IRQ_HANDLER
         PHA
         TXA
@@ -333,7 +339,7 @@ IRQ_HANDLER_MAIN:
 }
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
-VIC_VALUES
+VIC_VALUES:
         !byte $10                       ;$D011 - Text, 24-rows
         !byte $00                       ;$D012 - Raster
         !byte $00                       ;$D013 - Latch X
@@ -346,10 +352,80 @@ VIC_VALUES
         !byte $00                       ;$D01A - Request VIC Interrupts: None
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
+CHARSET = $4800
+
+INIT_MEGA65:
+        lda #$47
+        sta $d02f
+        lda #$53
+        sta $d02f                       ; knock-knock for MEGA65-IO personality
+
+        lda #$00
+        ldx #$00
+        ldy #$00
+        ldz #$00
+        map
+        eom
+
+        lda $d031
+        ora #%01000000
+        sta $d031                       ; turn on FAST flag (3.5 MHz)
+					; NOTE: This resets the $d058 byte-width value
+
+        lda $d054
+        ora #%01000000                  ; turn on VFAST flag (40 MHz) (needs FAST flag on too to work)
+        sta $d054
+
+        lda $D031
+        and #%01111111     ; clear H640 (bit 7)  (bring back to 40x25 mode)
+        sta $D031
+
+        lda $d054
+        ora #%00000101
+        sta $d054                       ; set SEAM mode CHR16 + FCLRHI
+
+        lda #(WIDTH & $ff)
+        sta $d058
+        lda #(WIDTH >> 8)
+        sta $d059                       ; store byte-width
+
+        lda #(WIDTH / 2)
+        sta $d05e                       ; store char-width
+
+        lda #<$0400
+        sta $D060
+
+        lda #>$0400
+        sta $D061
+
+        lda #$00
+        sta $D062
+        sta $D063                       ; store SCREEN-PTR to $0400
+
+        lda #<CHARSET
+        sta $D068
+
+        lda #>CHARSET
+        sta $D069                       ; store CHARDATA-PTR to $4800
+
+        rts
+
+;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 ; Starting address
 !zone {
 START:
         SEI
+
+        ; Init VIC-II
+        CLD
+        LDX #$09
+._L00   LDA VIC_VALUES,X
+        STA $D011,X                     ;VIC Control Register 1
+        DEX
+        BPL ._L00
+
+        jsr INIT_MEGA65
+
 !if USE_PRG = 1 {
         ; Needed to set them manually since the cartridge sets them
         ; by overriding their address
@@ -371,46 +447,6 @@ START:
 
         LDX #$FA                        ;Stack size
         TXS
-
-        ; Init VIC
-        CLD
-        LDX #$09
-._L00   LDA VIC_VALUES,X
-        STA $D011,X                     ;VIC Control Register 1
-        DEX
-        BPL ._L00
-
-!if USE_PRG = 0 {
-        ; Init MEGA65
-        ; -----------
-
-        lda #$47
-        sta $d02f
-        lda #$53
-        sta $d02f                       ; knock-knock for MEGA65-IO personality
-
-        lda $d031
-        ora #%01000000
-        sta $d031                       ; turn on FAST flag (3.5 MHz)
-					; NOTE: This resets the $d058 byte-width value
-
-        lda $d054
-        ora #%01000000                  ; turn on VFAST flag (40 MHz) (needs FAST flag on too to work)
-        sta $d054
-
-        lda $d054
-        ora #%00000101
-        sta $d054                       ; set SEAM mode CHR16 + FCLRHI
-
-        lda #(WIDTH & $ff)
-        sta $d058
-        lda #(WIDTH >> 8)
-        sta $d059                       ; store byte-width
-
-        lda #(WIDTH / 2)
-        sta $d05e                       ; store char-width
-
-}
 
         ; Init CIA
         LDA #$7F                        ;Clear interrupt flags
@@ -4103,8 +4139,8 @@ DrawChar:
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 ; Data:
 !if USE_PRG = 1 {
-        * = $3800                       ;To avoid updating all frame pointers
-                                        ; let's place it at $3800 in .prg
+        * = $4800                       ;To avoid updating all frame pointers
+                                        ; let's place it at $4800 in .prg
 } else {
         * = $F800
 }

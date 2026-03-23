@@ -13,15 +13,15 @@ all: crt
 
 lemans: src/lemans.asm src/charset-f800-f97f.bin src/sprites-f980-f9ff.bin src/charset-fa00-fcbf.bin src/sprites-fcc0-ffbf.bin
 	# 64tass -Wall -Werror --cbm-prg -o bin/lemans.prg -L bin/list.txt -l bin/labels.txt --vice-labels src/lemans.asm
-	acme --cpu m65 -v4 -l bin/lemans.sym -r bin/lemans.rep src/lemans.asm
+	acme -D USE_PRG=1 --cpu m65 -v4 -l bin/lemans.sym -r bin/lemans.rep src/lemans.asm
 	md5sum bin/lemans.prg orig/lemans.prg
 
 lemans-stub: src/lemans_stub.asm
 	64tass -Wall -Werror --cbm-prg -o bin/lemans_stub.prg -L bin/list.txt -l bin/labels.txt --vice-labels src/lemans_stub.asm
 
-lemans-mega65 : lemans lemans-stub
-	dd if=bin/lemans.prg of=bin/lemans.bin skip=2 bs=1
-	cat bin/lemans_stub.prg bin/lemans.bin > bin/lemans-mega65.prg
+#lemans-mega65 : lemans lemans-stub
+	# dd if=bin/lemans.prg of=bin/lemans.bin skip=2 bs=1
+	# cat bin/lemans_stub.prg bin/lemans.bin > bin/lemans-mega65.prg
 
 crt: lemans
 	dd if=bin/lemans.prg of=bin/lemans.bin skip=2 bs=1
@@ -57,8 +57,8 @@ d64: intro-exo
 	$(C1541) $(D64_IMAGE) -write bin/intro-exo.prg "lemans"
 	$(C1541) $(D64_IMAGE) -list
 
-run: lemans-stub lemans-mega65
-	$(XEMU) -uartmon :4510 -prg bin/lemans-mega65.prg &
+run: lemans
+	$(XEMU) -uartmon :4510 -prg bin/lemans.prg &
 
 debug: lemans-lia-exo
 	$(DEBUGGER) -d64 $(D64_IMAGE) -symbols bin/labels.txt
