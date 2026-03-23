@@ -3789,11 +3789,11 @@ _L28    RTS
 }
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
-tmp1 .BYTE $00
-tmp_row_lo .BYTE $00
-tmp_row_hi .BYTE $00
-tmp_col .BYTE $00
-char_value .BYTE $00
+tmp1 !byte $00
+tmp_row_lo !byte $00
+tmp_row_hi !byte $00
+tmp_col !byte $00
+char_value !byte $00
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 
@@ -3810,8 +3810,8 @@ DrawChar_RowOffset:
 
     ; Y * 5 = Y + (Y * 4)
 
-    asl a             ; *2
-    asl a             ; *4
+    asl               ; *2
+    asl               ; *4
     clc
     adc tmp1          ; Y*5
 
@@ -3859,7 +3859,7 @@ DrawChar:
     ; ------------------------
 
     txa
-    asl a       ; *2
+    asl         ; *2
     sta tmp_col
 
     ; ------------------------
