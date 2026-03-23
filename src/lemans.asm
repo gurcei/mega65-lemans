@@ -9,6 +9,49 @@
 
 WIDTH = 80
 
+MULTINA = $d770
+MULTINB = $d774
+MULTOUT = $d778
+
+!macro multiply16 .in1, .in2, .out {
+	phz
+  phy
+  phx
+	ldz #$00
+	ldy #$00
+	ldx .in1+1
+	lda .in1
+	stq MULTINA
+
+	ldx .in2+1
+	lda .in2
+	stq MULTINB
+
+	ldq MULTOUT
+	stx .out+1
+	sta .out
+  plx
+  ply
+	plz
+}
+
+!macro multiply8 .in1, .in2, .out {
+	phz
+	ldz #$00
+	ldy #$00
+	ldx #$00
+	lda .in1
+	stq MULTINA
+
+	lda .in2
+	stq MULTINB
+
+	ldq MULTOUT
+	stx .out+1
+	sta .out
+	plz
+}
+
 ; Compile-time variables
 ; To compile the unmodified original game, all values must be 0
 
@@ -143,11 +186,16 @@ ZP_ROAD_X_LEFT_ROW_TBL = $79            ;25 elements (height of screen)
 ZP_ROAD_X_RIGHT_ROW_TBL = $92           ;25 elements (height of screen)
 ZP_ROAD_STATE_ROW_TBL = $AB             ;25 elements (height of screen)
 
+CLR_PTR0 = $F0
+CLR_PTR1 = $F1
+CLR_PTR2 = $F2
+CLR_PTR3 = $F3
 ;
 ; **** FIELDS ****
 ;
 SCREEN_RAM = $0400
-COLOR_RAM = $D800
+COLOR_RAM = $D800        ; old c64 colour ram location
+COLOUR_BASE = $FF80000   ; mega65 colour ram location
 
 ;
 ; **** ABSOLUTE ADDRESSES ****
@@ -855,6 +903,7 @@ PRINT_TITLE_SCREEN:
         lda #$01
         ldx #$01
         ldy #$01
+        ldz #$02
 _silly
         jsr DrawChar
         iny
@@ -3794,6 +3843,10 @@ tmp_row_lo !byte $00
 tmp_row_hi !byte $00
 tmp_col !byte $00
 char_value !byte $00
+clr_value !byte $00
+
+in1 !word $0000
+in2 !word $0000
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 
@@ -3801,34 +3854,10 @@ DrawChar_RowOffset:
 ; input: Y = row
 ; output: tmp_row_lo/tmp_row_hi = row * 80
 
-    ; Y * 80 = (Y * 5) * 16
-
-; tmp_row = Y * 80
-
-    tya
-    sta tmp1          ; Y
-
-    ; Y * 5 = Y + (Y * 4)
-
-    asl               ; *2
-    asl               ; *4
-    clc
-    adc tmp1          ; Y*5
-
-    ; now multiply by 16 (shift left 4)
-
-    sta tmp_row_lo
-    lda #0
-    sta tmp_row_hi
-
-    asl tmp_row_lo
-    rol tmp_row_hi
-    asl tmp_row_lo
-    rol tmp_row_hi
-    asl tmp_row_lo
-    rol tmp_row_hi
-    asl tmp_row_lo
-    rol tmp_row_hi
+    sty in1
+    lda #80
+    sta in2
+    +multiply8 in1, in2, tmp_row_lo
 
     rts
 
@@ -3838,59 +3867,92 @@ DrawChar:
     ; A = char
     ; X = col
     ; Y = row
+    ; Z = colour
 
     sta char_value
+    stz clr_value
 
     pha
-    txa
-    pha
-    tya
-    pha
+    phx
+    phy
+    phz
+
+        ; prepare CLR_PTR
+        lda #<COLOUR_BASE
+        sta CLR_PTR0
+	lda #>COLOUR_BASE
+        sta CLR_PTR1
+        lda #^COLOUR_BASE
+        sta CLR_PTR2
+        lda #((COLOUR_BASE >> 24) & $FF)
+        sta CLR_PTR3                    ; prepare 32-bit zp pointer to mega65 colour ram
 
     ; ------------------------
-    ; calculate row offset
-    ; row * 80
+    ; row offset (Y * 80)
     ; ------------------------
     jsr DrawChar_RowOffset
 
-
     ; ------------------------
-    ; column offset (col * 2)
+    ; col offset (X * 2)
     ; ------------------------
-
     txa
     asl         ; *2
     sta tmp_col
 
     ; ------------------------
-    ; add together
+    ; final address = SCREEN + row + col
     ; ------------------------
 
     clc
     lda tmp_row_lo
     adc tmp_col
+    sta tmp_row_lo
+
+    lda tmp_row_hi
+    adc #0
+    sta tmp_row_hi
+
+    clc
+    lda tmp_row_lo
+    adc #<SCREEN_RAM
     sta ZP_TMP_PTR_LO
 
     lda tmp_row_hi
     adc #>SCREEN_RAM
     sta ZP_TMP_PTR_HI
 
+    clc
+    lda tmp_row_lo
+    adc #<COLOUR_BASE
+    sta CLR_PTR0
+
+    lda tmp_row_hi
+    adc #>COLOUR_BASE
+    sta CLR_PTR1
+
     ; ------------------------
-    ; write character
+    ; write char + attribute
     ; ------------------------
 
     ldy #0
-    lda char_value   ; or use A directly if preserved
+    lda char_value
     sta (ZP_TMP_PTR_LO),y
 
     iny
-    lda #0           ; attributes (safe default)
+    lda #$00        ; attribute (safe default)
     sta (ZP_TMP_PTR_LO),y
 
-    pla
-    tay
-    pla
-    tax
+    lda #$00
+    ldz #$00
+    sta [CLR_PTR0],z
+
+    inz
+    lda clr_value
+    sta [CLR_PTR0],z
+
+    plz
+    ply
+    plx
     pla
 
     rts
