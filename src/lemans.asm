@@ -1104,7 +1104,6 @@ DELAY_01:
 ; Clears the screen RAM with register A
 !zone {
 CLEAR_SCREEN_RAM:
-        lda #' '
         ldy #$00
         ldx #$00
         ldz #$00
@@ -1162,7 +1161,7 @@ INIT_SCREEN:
         cpx #40
         bne ._L01
 
-        ldx #$32
+        ldx #32
         dey
         bpl ._L01
 
