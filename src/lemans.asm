@@ -1106,7 +1106,7 @@ CLEAR_SCREEN_RAM:
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 ; Setup screen, colors, etc.
 !zone {
-INIT_SCREEN
+INIT_SCREEN:
         LDA #$44
         JSR CLEAR_SCREEN_RAM
         LDA #$00                        ;Black
@@ -1117,79 +1117,115 @@ INIT_SCREEN
         LDA #$0F                        ;Light Grey
         STA $D023                       ;Background Color 2, Multi-Color Register 1
 
-        LDA #$0C                        ;Grey
+        inc clr_only
+        LDZ #$0C                        ;Grey
         LDY #$00
-._L00   STA COLOR_RAM,Y
-        STA COLOR_RAM+$0100,Y
-        STA COLOR_RAM+$0200,Y
-        STA COLOR_RAM+$02E8,Y
-        INY
+        LDX #$00
+._L00   jsr DrawChar
+        INX
+        CPX #40
         BNE ._L00
 
-        LDA #<(SCREEN_RAM + 32)
-        STA ZP_TMP_PTR_LO
-        LDA #>(SCREEN_RAM + 32)
-        STA ZP_TMP_PTR_HI
+        LDX #$00
+        INY
+        CPY #25
+        BNE ._L00
+        dec clr_only
 
         ; Fill the right part of the screen with spaces
-        LDX #24                         ;In total 24 rows
+        lda #$20
+        ldy #24
+        ldx #32
 
-._L01   LDY #$07                        ;7 colums: from 32 to 39
-        LDA #$20                        ;Space character
-._L02   STA (ZP_TMP_PTR_LO),Y
-        DEY
-        BPL ._L02
+._L01   jsr DrawChar
+        inx
+        cpx #40
+        bne ._L01
 
-        LDA ZP_TMP_PTR_LO
-        CLC
-        ADC #$28     ;#%00101000
-        STA ZP_TMP_PTR_LO
-        LDA ZP_TMP_PTR_HI
-        ADC #$00     ;#%00000000
-        STA ZP_TMP_PTR_HI
-        DEX
-        BPL ._L01
+        ldx #$32
+        dey
+        bpl ._L01
 
+        ldx #39
         LDY #$07                        ;7 colums
-._L03   LDA SCORE_MSG,Y
-        STA SCREEN_RAM+40*1+32,Y
+
+._L03   phy
+        LDA SCORE_MSG,Y
+        ; STA SCREEN_RAM+40*1+32,Y
+        ldy #01
+        ldz #01 ; white
+        jsr DrawChar
+        ply
+
+        phy
         LDA TIME_MSG,Y
-        STA SCREEN_RAM+40*4+32,Y
+        ;STA SCREEN_RAM+40*4+32,Y
+        ldy #04
+        ldz #03 ; cyan
+        jsr DrawChar
+        ply
+
+        phy
         LDA HISCORE_MSG,Y
-        STA SCREEN_RAM+40*7+32,Y
+        ;STA SCREEN_RAM+40*7+32,Y
+        ldy #07
+        ldz #05 ; green
+        jsr DrawChar
+        ply
+
+        phy
         LDA SPEED_MSG,Y
-        STA SCREEN_RAM+40*10+32,Y
+        ;STA SCREEN_RAM+40*10+32,Y
+        ldy #10
+        ldz #01 ; white
+        jsr DrawChar
+        ply
 
-        LDA #$01                        ;White
-        STA COLOR_RAM+40*1+32,Y         ;Color for 'Score' txt
-        STA COLOR_RAM+40*10+32,Y        ;Color for 'Speed' txt
-        STA COLOR_RAM+40*14+32,Y        ;Color for 'Extended' txt
-        STA COLOR_RAM+40*15+32,Y        ;Color for '    Time' txt
+        phy
+        inc clr_only
+        ldy #14
+        ldz #01
+        jsr DrawChar    ; 'Extended' txt
+        ldy #15
+        jsr DrawChar    ; '   Time' txt
 
-        LDA #$03                        ;Cyan
-        STA COLOR_RAM+40*4+32,Y         ;Color for 'Time' txt
-        STA COLOR_RAM+40*11+32,Y        ;Color for Speed Dashboard top
-        STA COLOR_RAM+40*12+32,Y        ;Color for Speed Dashboard bottom
+        ldz #$03
+        ldy #11
+        jsr DrawChar    ; Speed Dashboard top
+        ldy #12
+        jsr DrawChar    ; Speed Dashboard bottom
 
-        LDA #$04                        ;Purple
-        STA COLOR_RAM+40*16+32,Y        ;Color to count the passed cars
-        STA COLOR_RAM+40*17+32,Y        ;These is a grid of 3x3 cars
-        STA COLOR_RAM+40*18+32,Y
-        STA COLOR_RAM+40*19+32,Y
-        STA COLOR_RAM+40*20+32,Y
-        STA COLOR_RAM+40*21+32,Y
+        ldz #$04        ; purple
+        ldy #16
+        jsr DrawChar    ; clr to count the passed cards (grid of 3x3 cars)
+        ldy #17
+        jsr DrawChar    ; clr to count the passed cards (grid of 3x3 cars)
+        ldy #18
+        jsr DrawChar    ; clr to count the passed cards (grid of 3x3 cars)
+        ldy #19
+        jsr DrawChar    ; clr to count the passed cards (grid of 3x3 cars)
+        ldy #20
+        jsr DrawChar    ; clr to count the passed cards (grid of 3x3 cars)
+        ldy #21
+        jsr DrawChar    ; clr to count the passed cards (grid of 3x3 cars)
 
-        LDA #$05                        ;Green
-        STA COLOR_RAM+40*7+32,Y         ;Color for Hi-Score txt
+        ldz #$07        ; yellow
+        ldy #02
+        jsr DrawChar    ; score value
+        ldy #05
+        jsr DrawChar    ; time value
+        ldy #08
+        jsr DrawChar    ; hi-score value
+        ldy #23
+        jsr DrawChar    ; bonus txt
+        ldy #24
+        jsr DrawChar    ; for '1000 PTS' txt
+        dec clr_only
+        ply
 
-        LDA #$07                        ;Yellow color for...
-        STA COLOR_RAM+40*2+32,Y         ;... for Score value
-        STA COLOR_RAM+40*5+32,Y         ;... for Time value
-        STA COLOR_RAM+40*8+32,Y         ;... for Hi-Score value
-        STA COLOR_RAM+40*23+32,Y        ;... for 'Bonus' txt
-        STA COLOR_RAM+40*24+32,Y        ;... for '1000 PTS' txt
+        DEX
         DEY
-        BPL ._L03
+        LBPL ._L03
 
         ; Print "KM/H"
         LDY #$71
