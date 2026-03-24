@@ -24,8 +24,8 @@ MULTOUT = $d778
 
 !macro multiply16 .in1, .in2, .out {
 	phz
-  phy
-  phx
+        phy
+        phx
 	ldz #$00
 	ldy #$00
 	ldx .in1+1
@@ -39,13 +39,15 @@ MULTOUT = $d778
 	ldq MULTOUT
 	stx .out+1
 	sta .out
-  plx
-  ply
+        plx
+        ply
 	plz
 }
 
 !macro multiply8 .in1, .in2, .out {
 	phz
+        phy
+        phx
 	ldz #$00
 	ldy #$00
 	ldx #$00
@@ -58,6 +60,8 @@ MULTOUT = $d778
 	ldq MULTOUT
 	stx .out+1
 	sta .out
+        plx
+        ply
 	plz
 }
 
@@ -1287,74 +1291,109 @@ COPY_SIZE = WIDTH * 24
 FIRST_SRC_BYTE = $0400 + WIDTH*24 - 1
 FIRST_CLR_SRC_BYTE = $ff80000 + WIDTH*24 - 1
 
+VISIBLE_CHARS = 31
+ROW_BYTES     = VISIBLE_CHARS * 2   ; = 62
+FULL_WIDTH    = 80                  ; your WIDTH
+ROWS          = 24
+
 !zone {
 SCROLL_DOWN:
-        ; Scroll down screen
-        LDY #31*2               ; this is actually the width to scroll (not height)
 
-        lda #(OP_COPY + SRC_DEC + DST_DEC)
+        ldx #23                ; start from bottom row
+
+.scroll_loop:
+
+        ; ------------------------
+        ; compute source row addr
+        ; ------------------------
+
+        lda #<(SCREEN_RAM + FULL_WIDTH*0)
+        sta dma_src_addr
+        lda #>(SCREEN_RAM + FULL_WIDTH*0)
+        sta dma_src_addr+1
+
+        txa
+        jsr mul80_add_src      ; adds X * FULL_WIDTH
+
+        ; ------------------------
+        ; compute dest row addr
+        ; ------------------------
+
+        lda #<(SCREEN_RAM + FULL_WIDTH*1)
+        sta dma_dst_addr
+        lda #>(SCREEN_RAM + FULL_WIDTH*1)
+        sta dma_dst_addr+1
+
+        txa
+        jsr mul80_add_dst      ; adds X * FULL_WIDTH
+
+        ; ------------------------
+        ; length = visible part only
+        ; ------------------------
+
+        lda #<ROW_BYTES
+        sta dma_length
+        lda #>ROW_BYTES
+        sta dma_length+1
+
+        lda #(OP_COPY)  ;  don't need (+ SRC_DEC + DST_DEC) anymore
         sta dma_cmd
 
-        lda #<COPY_SIZE
-        sta dma_length
-        lda #>COPY_SIZE
-        sta dma_length + 1
-
-        lda #<FIRST_SRC_BYTE
-        sta dma_src_addr
-        lda #>FIRST_SRC_BYTE
-        sta dma_src_addr + 1
-
         lda #$00
         sta dma_src_bank
-        sta dma_src_mb
-
-        lda #<(FIRST_SRC_BYTE + WIDTH)
-        sta dma_dst_addr
-        lda #>(FIRST_SRC_BYTE + WIDTH)
-        sta dma_dst_addr + 1
-
-        lda #$00
         sta dma_dst_bank
+        sta dma_src_mb
         sta dma_dst_mb
 
-    lda #$00
-    sta $d702
-    lda #>dma_copy_line
-    sta $d701
-    lda #<dma_copy_line
-    sta $d705
+        ; ------------------------
+        ; trigger DMA
+        ; ------------------------
 
+        lda #$00
+        sta $d702
+        lda #>dma_copy_line
+        sta $d701
+        lda #<dma_copy_line
+        sta $d705
 
-clrcpy:
-        ; Color RAM
-	; ---------
-        lda #<FIRST_CLR_SRC_BYTE
+        ; ------------------------
+        ; colour RAM copy
+        ; ------------------------
+
+        lda #<(COLOUR_BASE)
         sta dma_src_addr
-        lda #>FIRST_CLR_SRC_BYTE
-        sta dma_src_addr + 1
+        lda #>(COLOUR_BASE)
+        sta dma_src_addr+1
+
+        txa
+        jsr mul80_add_src
+
+        lda #<(COLOUR_BASE + FULL_WIDTH)
+        sta dma_dst_addr
+        lda #>(COLOUR_BASE + FULL_WIDTH)
+        sta dma_dst_addr+1
+
+        txa
+        jsr mul80_add_dst
 
         lda #$08
         sta dma_src_bank
-	lda #$ff
-        sta dma_src_mb
-
-        lda #<(FIRST_CLR_SRC_BYTE + WIDTH)
-        sta dma_dst_addr
-        lda #>(FIRST_CLR_SRC_BYTE + WIDTH)
-        sta dma_dst_addr + 1
-
-        lda #$08
         sta dma_dst_bank
-	lda #$ff
+
+        lda #$FF
+        sta dma_src_mb
         sta dma_dst_mb
 
-    lda #$00
-    sta $d702
-    lda #>dma_copy_line
-    sta $d701
-    lda #<dma_copy_line
-    sta $d705
+        ; trigger again
+        lda #$00
+        sta $d702
+        lda #>dma_copy_line
+        sta $d701
+        lda #<dma_copy_line
+        sta $d705
+
+        dex
+        lbpl .scroll_loop
 
         ; Scroll down "ROW" properties
 ._L01   LDY #23
@@ -1369,6 +1408,40 @@ clrcpy:
 
         RTS
 }
+
+mul80_add_src:
+        ; X = row
+        stx in1
+        lda #80
+        sta in2
+        +multiply8 in1, in2, tmp_row_lo
+
+        clc
+        lda dma_src_addr
+        adc tmp_row_lo
+        sta dma_src_addr
+
+        lda dma_src_addr+1
+        adc tmp_row_hi
+        sta dma_src_addr+1
+        rts
+
+mul80_add_dst:
+        ; X = row
+        stx in1
+        lda #80
+        sta in2
+        +multiply8 in1, in2, tmp_row_lo
+
+        clc
+        lda dma_dst_addr
+        adc tmp_row_lo
+        sta dma_dst_addr
+
+        lda dma_dst_addr+1
+        adc tmp_row_hi
+        sta dma_dst_addr+1
+        rts
 
 dma_copy_line:            ; length srcaddr srcbank srcmb dstaddr dstbank dstmb
 ; +edma OP_COPY,            WIDTH, $0000,  $0,     $80,  $0000,  $3,     $00
