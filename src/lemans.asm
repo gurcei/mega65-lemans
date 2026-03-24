@@ -1228,22 +1228,35 @@ INIT_SCREEN:
         LBPL ._L03
 
         ; Print "KM/H"
-        LDY #$71
-        STY SCREEN_RAM+40*11+38         ;Place "K" of KM/H
-        INY
-        STY SCREEN_RAM+40*11+39         ;Place "M" of KM/H
-        INY
-        STY SCREEN_RAM+40*12+38         ;Place "/" of KM/H
-        INY
-        STY SCREEN_RAM+40*12+39         ;Place "H" of KM/H
+        inc chr_only
+        LDA #$71
+        LDY #11
+        LDX #38
+        jsr DrawChar
+        ;STY SCREEN_RAM+40*11+38         ;Place "K" of KM/H
+
+        INC
+        INX
+        jsr DrawChar
+        ;STY SCREEN_RAM+40*11+39         ;Place "M" of KM/H
+
+        INC
+        LDY #12
+        LDX #38
+        jsr DrawChar
+        ;STY SCREEN_RAM+40*12+38         ;Place "/" of KM/H
+
+        INC
+        INX
+        jsr DrawChar
+        ;STY SCREEN_RAM+40*12+39         ;Place "H" of KM/H
+        dec chr_only
 
         JSR PRINT_SCORE_AND_TIME
         JSR PRINT_SPEED
 
-        LDA #<SCREEN_RAM
-        STA ZP_TMP_PTR_LO
-        LDA #>SCREEN_RAM
-        STA ZP_TMP_PTR_HI
+        lda #$00
+        sta ypos
 
         LDX #24                         ;x=24
 ._L04   LDY #$03                        ;y=3
@@ -1257,22 +1270,29 @@ INIT_SCREEN:
         BNE ._L07
 
 ._L06   LDA SHOULDER_PATTERN_LEFT_B,Y
-._L07   STA (ZP_TMP_PTR_LO),Y
+._L07   inc chr_only
+        phx
+        phy
+        sty xpos
+        ldx xpos
+        ldy ypos
+        jsr DrawChar
+        ply
+        plx
+        dec chr_only
+       ; STA (ZP_TMP_PTR_LO),Y
         DEY
         BPL ._L05
-        LDA ZP_TMP_PTR_LO
-        CLC
-        ADC #40
-        STA ZP_TMP_PTR_LO
-        LDA ZP_TMP_PTR_HI
-        ADC #$00
-        STA ZP_TMP_PTR_HI
+
+        inc ypos
+
         DEX
         BPL ._L04
-        LDA #<(SCREEN_RAM+25)
-        STA ZP_TMP_PTR_LO
-        LDA #>(SCREEN_RAM+25)
-        STA ZP_TMP_PTR_HI
+
+        ; right shoulder
+        lda #$00
+        sta ypos
+
         LDX #24
 ._L08   LDY #$03
 ._L09   CPY #$02
@@ -1283,41 +1303,45 @@ INIT_SCREEN:
         LDA #$46                        ;Right shoulder char (?)
         BNE ._L11
 ._L10   LDA SHOULDER_PATTERN_RIGHT_B,Y
-._L11   STA (ZP_TMP_PTR_LO),Y
+._L11   inc chr_only
+        phx
+        phy
+
+        pha
+        tya
+        clc
+        adc #25
+        sta xpos
+        pla
+
+        ldx xpos
+        ldy ypos
+        jsr DrawChar
+        ply
+        plx
+        dec chr_only
+        ;STA (ZP_TMP_PTR_LO),Y
+
         DEY
         BPL ._L09
-        LDA ZP_TMP_PTR_LO
-        CLC
-        ADC #40
-        STA ZP_TMP_PTR_LO
-        LDA ZP_TMP_PTR_HI
-        ADC #$00
-        STA ZP_TMP_PTR_HI
+
+        inc ypos
+
         DEX
         BPL ._L08
 
-        ; Set pointer to color ram
-        LDA #<COLOR_RAM+7
-        STA ZP_TMP_PTR_LO
-        LDA #>COLOR_RAM+7
-        STA ZP_TMP_PTR_HI
-
         ; Paint 25 * 20 of Light Blue (Road)
-        LDX #24
-._L12   LDY #19
-        LDA #$0E                        ;Color Light Blue
-._L13   STA (ZP_TMP_PTR_LO),Y
-        DEY
+        LDY #24
+._L12   LDX #24 ; = #07 + #19
+        LDZ #$0E                        ;Color Light Blue
+._L13   LDA #$44  ; full char
+        jsr DrawChar
+        ;STA (ZP_TMP_PTR_LO),Y
+        DEX
+        CPX #07
         BPL ._L13
 
-        LDA ZP_TMP_PTR_LO
-        CLC
-        ADC #40
-        STA ZP_TMP_PTR_LO
-        LDA ZP_TMP_PTR_HI
-        ADC #$00
-        STA ZP_TMP_PTR_HI
-        DEX
+        DEY
         BPL ._L12
 
         ; Setup "row" properties
@@ -1578,13 +1602,14 @@ PRINT_SCORE_AND_TIME:
 
 ._L00
         ; Print Hi Score
-        LDA #<HI_SCORE_OFFSET
-        STA ZP_SCREEN_PTR_LO
-        LDA #>HI_SCORE_OFFSET
-        STA ZP_SCREEN_PTR_HI
+; HI_SCORE_OFFSET = SCREEN_RAM + 40 * 8 + 32
+        lda #32
+        sta xpos
+        lda #08
+        sta ypos
+
         LDA #$00                        ;Print "0" as " "
         STA ZP_ZERO_IS_ZERO
-        TAY                             ;Y is screen offset
         LDA ZP_HI_SCORE_03
         STA ZP_BCD_TO_PRINT
         JSR PRINT_BCD
@@ -1595,13 +1620,18 @@ PRINT_SCORE_AND_TIME:
         STA ZP_BCD_TO_PRINT
         JSR PRINT_BCD
         LDA #$21                        ;Append "0" after Hi-Score
-        STA (ZP_SCREEN_PTR_LO),Y
+        ldx xpos
+        ldy ypos
+        ldz #07 ; yellow
+        jsr DrawChar
 
         ; Print Score
-        LDA #<SCORE_OFFSET
-        STA ZP_SCREEN_PTR_LO
-        LDA #>SCORE_OFFSET
-        STA ZP_SCREEN_PTR_HI
+;SCORE_OFFSET = SCREEN_RAM + 40 * 2 + 32
+        lda #32
+        sta xpos
+        lda #02
+        sta ypos
+
         LDA #$00                        ;Print "0" as " "
         STA ZP_ZERO_IS_ZERO
         TAY
@@ -1615,13 +1645,18 @@ PRINT_SCORE_AND_TIME:
         STA ZP_BCD_TO_PRINT
         JSR PRINT_BCD
         LDA #$21                        ;Append "0" after Score
-        STA (ZP_SCREEN_PTR_LO),Y
+        ldx xpos
+        ldy ypos
+        ldz #07 ; yellow
+        jsr DrawChar
 
         ; Print Time
-        LDA #<TIME_OFFSET
-        STA ZP_SCREEN_PTR_LO
-        LDA #>TIME_OFFSET
-        STA ZP_SCREEN_PTR_HI
+;TIME_OFFSET = SCREEN_RAM + 40 * 5 + 35
+        lda #35
+        sta xpos
+        lda #05
+        sta ypos
+
         LDA #$00                        ;Print "0" as " "
         STA ZP_ZERO_IS_ZERO
         TAY
@@ -1632,7 +1667,11 @@ PRINT_SCORE_AND_TIME:
         BNE ._L01
         DEY
         LDA #$21                        ;Append a "0" after Time
-        STA (ZP_SCREEN_PTR_LO),Y
+        ldx xpos
+        ldy ypos
+        ldz #07 ; yellow
+        jsr DrawChar
+
 ._L01   RTS
 }
 
@@ -1656,23 +1695,32 @@ PRINT_BCD:
         AND #$0F
         STA ZP_DIGIT_TO_PRINT
 
-PRINT_DIGIT
+PRINT_DIGIT:
         LDA ZP_DIGIT_TO_PRINT
         BNE ._L01
 
         ; Determine how to print '0'. With ' ' or with '0'?
         LDX ZP_ZERO_IS_ZERO
         BNE ._L01
+
         LDA #$20                        ;Space character
-        STA (ZP_SCREEN_PTR_LO),Y
+        ldx xpos
+        ldy ypos
+        ldz #$07        ; yellow all the time?
+        jsr DrawChar
+
+        cmp #$00
         BNE ._L02
 
 ._L01   CLC
         ADC #$21                        ;Get correct number. $21 is "Zero"
-        STA (ZP_SCREEN_PTR_LO),Y
+        ldx xpos
+        ldy ypos
+        ldz #$07        ; yellow all the time?
+        jsr DrawChar
         LDA #$01
         STA ZP_ZERO_IS_ZERO
-._L02   INY                             ;Update char pointer
+._L02   inc xpos                             ;Update char pointer
         RTS
 
         ; Unused ? addresses ?
@@ -1716,14 +1764,48 @@ PRINT_SPEED:
         STA ZP_ZERO_IS_ZERO
 
         ; Update Speed Dashboard
-._L02   LDA DIGITS_DASHBOARD_TL_TBL,Y
-        STA SCREEN_RAM+40*11+32,X
+._L02   phx
+
+        txa
+        clc
+        adc #32
+        tax
+
+        inc chr_only
+        LDA DIGITS_DASHBOARD_TL_TBL,Y
+
+        phy
+        ldy #11
+        jsr DrawChar
+        ply
+        ;STA SCREEN_RAM+40*11+32,X
+
         LDA DIGITS_DASHBOARD_TR_TBL,Y
-        STA SCREEN_RAM+40*11+33,X
+        phy
+        ldy #11
+        inx
+        jsr DrawChar
+        ply
+        ;STA SCREEN_RAM+40*11+33,X
+
         LDA DIGITS_DASHBOARD_BL_TBL,Y
-        STA SCREEN_RAM+40*12+32,X
+        phy
+        dex
+        ldy #12
+        jsr DrawChar
+        ply
+        ;STA SCREEN_RAM+40*12+32,X
+
         LDA DIGITS_DASHBOARD_BR_TBL,Y
-        STA SCREEN_RAM+40*12+33,X
+        phy
+        inx
+        ldy #12
+        jsr DrawChar
+        ply
+        ;STA SCREEN_RAM+40*12+33,X
+        dec chr_only
+        plx
+
         INX
         INX
 ._L03   RTS
