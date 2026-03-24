@@ -1016,12 +1016,32 @@ PRINT_TITLE_SCREEN:
         JSR DELAY_01
 
         ; Blink 'Press F1...'
-        LDA COLOR_RAM + 40 * 17 + 8
+        ldx #08
+        ldy #17
+        jsr GetChar
+        lda clr_value
+        ; LDA COLOR_RAM + 40 * 17 + 8
+
         EOR #$03                        ;Switch between black and cyan
+        and #$0f
+        taz
         LDY #$0F                        ;16 columns to blink
-._L04   STA COLOR_RAM+40*17+8,Y         ;3 rows
-        STA COLOR_RAM+40*18+8,Y
-        STA COLOR_RAM+40*19+8,Y
+        ldx #08
+
+._L04   phy
+        inc clr_only
+        ldy #17
+        jsr DrawChar
+        ;STA COLOR_RAM+40*17+8,Y         ;3 rows
+        ldy #18
+        jsr DrawChar
+        ;STA COLOR_RAM+40*18+8,Y
+        ldy #19
+        jsr DrawChar
+        ;STA COLOR_RAM+40*19+8,Y
+        dec clr_only
+        ply
+        inx
         DEY
         BPL ._L04
         JMP ._L03
@@ -4371,6 +4391,88 @@ do_clr:
     sta [CLR_PTR0],z
 
 skip_clr:
+    plz
+    ply
+    plx
+    pla
+
+    rts
+
+;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
+
+GetChar:
+    ; X = col
+    ; Y = row
+    ; returns:
+    ;   char_value
+    ;   clr_value
+
+    pha
+    phx
+    phy
+    phz
+
+        ; prepare CLR_PTR
+        lda #^COLOUR_BASE
+        sta CLR_PTR2
+        lda #((COLOUR_BASE >> 24) & $FF)
+        sta CLR_PTR3                    ; prepare 32-bit zp pointer to mega65 colour ram
+
+    ; ------------------------
+    ; row offset (Y * 80)
+    ; ------------------------
+    jsr DrawChar_RowOffset
+
+    ; ------------------------
+    ; col offset (X * 2)
+    ; ------------------------
+    txa
+    asl         ; *2
+    sta tmp_col
+
+    ; ------------------------
+    ; final address = SCREEN + row + col
+    ; ------------------------
+
+    clc
+    lda tmp_row_lo
+    adc tmp_col
+    sta tmp_row_lo
+
+    lda tmp_row_hi
+    adc #0
+    sta tmp_row_hi
+
+    clc
+    lda tmp_row_lo
+    adc #<SCREEN_RAM
+    sta SCR_PTR0
+
+    lda tmp_row_hi
+    adc #>SCREEN_RAM
+    sta SCR_PTR1
+
+    clc
+    lda tmp_row_lo
+    adc #<COLOUR_BASE
+    sta CLR_PTR0
+
+    lda tmp_row_hi
+    adc #>COLOUR_BASE
+    sta CLR_PTR1
+
+    ; ------------------------
+    ; read char + clr
+    ; ------------------------
+
+    ldy #0
+    lda char_value
+    sta char_value
+
+    ldz #$01
+    lda [CLR_PTR0],z
+    sta clr_value
+
     plz
     ply
     plx
