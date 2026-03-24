@@ -222,6 +222,9 @@ CLR_PTR0 = $F0
 CLR_PTR1 = $F1
 CLR_PTR2 = $F2
 CLR_PTR3 = $F3
+
+SCR_PTR0 = $F4
+SCR_PTR1 = $F5
 ;
 ; **** FIELDS ****
 ;
@@ -344,7 +347,7 @@ IRQ_HANDLER_MAIN:
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 VIC_VALUES:
-        !byte $10                       ;$D011 - Text, 24-rows
+        !byte $18                       ;$D011 - Text, 24-rows
         !byte $00                       ;$D012 - Raster
         !byte $00                       ;$D013 - Latch X
         !byte $00                       ;$D014 - Latch Y
@@ -412,6 +415,13 @@ INIT_MEGA65:
         lda #>CHARSET
         sta $D069                       ; store CHARDATA-PTR to $4800
 
+;        lda #<$1000
+;        sta $D06C
+;        lda #>$1000
+;        sta $D06D                       ; store SPRITE-PTR to ??
+;        lda #$80
+;        sta $D06E                       ; use 16-bit sprite pointer flag
+
         rts
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
@@ -419,6 +429,10 @@ INIT_MEGA65:
 !zone {
 START:
         SEI
+
+        lda #$00
+        sta chr_only
+        sta clr_only
 
         ; Init VIC-II
         CLD
@@ -429,6 +443,13 @@ START:
         BPL ._L00
 
         jsr INIT_MEGA65
+
+; Select VIC-II Bank 1 ($4000-$7FFF)
+; NOTE: Let's not do this. Instead, invest time in porting sprite logic to RRB soft sprites...
+;lda $dd00       ; Read current CIA2 Port A
+;and #%11111100  ; Mask out the bottom 2 bits (clear them)
+;ora #%00000010  ; Set bottom 2 bits to %00 (Bank 3)
+;sta $dd00       ; Write back to $DD00
 
 !if USE_PRG = 1 {
         ; Needed to set them manually since the cartridge sets them
@@ -1693,19 +1714,21 @@ DRAW_ROAD_TOP_ROW:
         BEQ ._L00
         DEC ZP_HEADLIGHT_DURATION
 
+        LDY #$00
         ; Paint top row with "full" characters
-._L00   LDY #31                         ;32 columns
-        LDA #$44                        ;"Full" character
-._L01   STA SCREEN_RAM,Y
-        DEY
-        BPL ._L01
-
+._L00   LDX #31                         ;32 columns
+        
+        phy
         LDY ZP_ROAD_STATE
         LDA ROAD_COLOR_TBL,Y
-        LDX #31                         ;32 columns
-._L02   STA COLOR_RAM,X
+        TAZ
+        ply
+
+        LDA #$44                        ;"Full" character
+._L01   jsr DrawChar  ; STA SCREEN_RAM,Y
+
         DEX
-        BPL ._L02
+        BPL ._L01
 
         INC ZP_SHOULDER_PATTERN_CHOOSER
         LDA ZP_SHOULDER_PATTERN_CHOOSER
@@ -1896,6 +1919,9 @@ _STATE_08
 }
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
+clr_only !byte $00
+chr_only !byte $00
+
 !zone {
 DRAW_SHOULDERS:
         LDA ZP_SHOULDER_LEFT_IDX        ;A = ZP_SHOULDER_LEFT_IDX
@@ -1933,7 +1959,14 @@ DRAW_SHOULDERS:
 
 ._L00   LDX ZP_ROAD_STATE
         LDA ROAD_COLOR2_TBL,X
-._L01   STA COLOR_RAM+1,Y
+        sta clr_value
+._L01   
+        inc clr_only
+        lda #$01
+        sta ZP_TMP_PTR_LO
+        jsr WrapDrawCharTopLine  ;  sta clr_value  ; STA COLOR_RAM+1,Y
+        dec clr_only
+
         INY
         CPY a1D
         BCC ._L01
@@ -1960,7 +1993,9 @@ DRAW_SHOULDERS:
         BNE ._L04
 
 ._L03   LDA SHOULDER_PATTERN_LEFT_B,X
-._L04   STA (ZP_TMP_PTR_LO),Y
+._L04   inc chr_only
+        jsr WrapDrawCharTopLine  ; STA (ZP_TMP_PTR_LO),Y
+        dec chr_only
         INX
         INY
         CPY #$04                        ;Draw 4 shoulder chars;
@@ -1986,7 +2021,10 @@ DRAW_SHOULDERS:
         LDA SHOULDER_PATTERN_RIGHT_A,X
         BNE ._L07
 ._L06   LDA SHOULDER_PATTERN_RIGHT_B,X
-._L07   STA (ZP_TMP_PTR_LO),Y
+._L07   inc chr_only
+        jsr WrapDrawCharTopLine  ; STA (ZP_TMP_PTR_LO),Y
+        dec chr_only
+
         INX
         INY
         CPY #$04                        ;Draw 4 shoulder chars?
@@ -1994,6 +2032,28 @@ DRAW_SHOULDERS:
 
         RTS
 }
+
+WrapDrawCharTopLine:
+        sta char_value
+        pha
+        phx
+        phy
+
+        clc
+        tya
+        adc ZP_TMP_PTR_LO
+        tax
+
+        lda char_value
+        ldy #$00
+        ldz clr_value  ; hard-code to red for now...
+
+        jsr DrawChar
+        
+        ply
+        plx
+        pla
+        rts
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 ; Road State 06: Split screen
@@ -2045,9 +2105,9 @@ DRAW_SPLIT_SCREEN:
 }
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
-ROAD_COLOR_TBL
+ROAD_COLOR_TBL:
         !byte $0D,$09,$08,$0D,$0D,$0A,$0B,$0C,$0C
-ROAD_COLOR2_TBL
+ROAD_COLOR2_TBL:
         !byte $0E,$09,$08,$0E,$0E,$0E,$0E,$0E,$0E
 
         ; Each of these patterns consist of 4 rows. Each row has 4 chars.
@@ -2069,38 +2129,38 @@ ROAD_COLOR2_TBL
         ; The rows are:
         ;  ROW0 represents a shoulder that is indented to the left.
         ;  ROW..N is a indented a bit to the rigth compared to ROW N-1.
-SHOULDER_PATTERN_RIGHT_A
+SHOULDER_PATTERN_RIGHT_A:
         !byte $40,$45,$46,$44
         !byte $41,$45,$47,$48
         !byte $42,$45,$45,$49
         !byte $43,$45,$45,$4A
 
-SHOULDER_PATTERN_RIGHT_B
+SHOULDER_PATTERN_RIGHT_B:
         !byte $40,$45,$4B,$44
         !byte $41,$45,$47,$44
         !byte $42,$45,$45,$4C
         !byte $43,$45,$45,$4D
 
-SHOULDER_PATTERN_LEFT_A
+SHOULDER_PATTERN_LEFT_A:
         !byte $57,$52,$52,$51
         !byte $56,$52,$52,$50
         !byte $55,$54,$52,$4F
         !byte $44,$53,$52,$4E
 
-SHOULDER_PATTERN_LEFT_B
+SHOULDER_PATTERN_LEFT_B:
         !byte $5A,$52,$52,$51
         !byte $59,$52,$52,$50
         !byte $44,$54,$52,$4F
         !byte $44,$58,$52,$4E
 
         ; Offset used for SHOULDER_PATTERN_A* and SHOULDER_PATTERN_B*
-SHOULDER_PATTERN_IDX_TBL
+SHOULDER_PATTERN_IDX_TBL:
         !byte $00,$04,$08,$0C
 
         ; Used to draw the "turns".
         ; Offset to the byte to draw
         ; Size: 64 bytes
-ROAD_TURN_TBL
+ROAD_TURN_TBL:
         !byte $00,$00,$01,$01,$01,$02,$02,$02
         !byte $03,$03,$04,$04,$05,$06,$07,$08
         !byte $09,$0A,$0B,$0C,$0D,$0D,$0E,$0E
@@ -4148,11 +4208,11 @@ DrawChar:
     clc
     lda tmp_row_lo
     adc #<SCREEN_RAM
-    sta ZP_TMP_PTR_LO
+    sta SCR_PTR0
 
     lda tmp_row_hi
     adc #>SCREEN_RAM
-    sta ZP_TMP_PTR_HI
+    sta SCR_PTR1
 
     clc
     lda tmp_row_lo
@@ -4168,13 +4228,22 @@ DrawChar:
     ; ------------------------
 
     ldy #0
+
+    lda clr_only
+    bne do_clr
+
+do_chr:
     lda char_value
-    sta (ZP_TMP_PTR_LO),y
+    sta (SCR_PTR0),y
 
     iny
     lda #$00        ; attribute (safe default)
-    sta (ZP_TMP_PTR_LO),y
+    sta (SCR_PTR0),y
 
+    lda chr_only
+    bne skip_clr
+
+do_clr:
     lda #$00
     ldz #$00
     sta [CLR_PTR0],z
@@ -4183,6 +4252,7 @@ DrawChar:
     lda clr_value
     sta [CLR_PTR0],z
 
+skip_clr:
     plz
     ply
     plx
