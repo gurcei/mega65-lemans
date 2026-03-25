@@ -235,11 +235,12 @@ COLOUR_BASE = $FF80000   ; mega65 colour ram location
 ;
 ; **** ABSOLUTE ADDRESSES ****
 ;
-SPR_FRAME_PTR_00 = $07F8
-SPR_FRAME_PTR_04 = $07FC
-SPR_FRAME_PTR_05 = $07FD
-SPR_FRAME_PTR_06 = $07FE
-SPR_FRAME_PTR_07 = $07FF
+SPR_PTR_BASE = $0400 + WIDTH * 25
+SPR_FRAME_PTR_00 = SPR_PTR_BASE         ; $07F8
+SPR_FRAME_PTR_04 = SPR_PTR_BASE + 4     ; $07FC
+SPR_FRAME_PTR_05 = SPR_PTR_BASE + 5     ; $07FD
+SPR_FRAME_PTR_06 = SPR_PTR_BASE + 6     ; $07FE
+SPR_FRAME_PTR_07 = SPR_PTR_BASE + 7     ; $07FF
 
 ;
 ; **** POINTERS ****
@@ -3723,25 +3724,60 @@ jF2FB
         JMP ._L13
 
 ._L03   LDY #$08
-._L04   LDA PASSED_CARS_POS_LO,Y
-        STA ZP_SCREEN_PTR_LO
-        LDA PASSED_CARS_POS_HI,Y
-        STA ZP_SCREEN_PTR_HI
+._L04   lda PASSED_CARS_XPOS,Y
+        sta xpos
+        lda PASSED_CARS_YPOS,Y
+        sta ypos
+        ;LDA PASSED_CARS_POS_LO,Y
+        ;STA ZP_SCREEN_PTR_LO
+        ;LDA PASSED_CARS_POS_HI,Y
+        ;STA ZP_SCREEN_PTR_HI
         STY ZP_TMP_49
 
-        LDX #$03
 ._L05   CPY ZP_PASSED_CARS_TOTAL
         BCC ._L06
         LDA #$20                        ;Space
-        BNE ._L07
-._L06   LDA PASSED_CARS_CHAR_TBL,X
-._L07   LDY TWO_BY_TWO_OFFSET_TBL,X
-        STA (ZP_SCREEN_PTR_LO),Y
-        LDY ZP_TMP_49
-        DEX
-        BPL ._L05
+        inc chr_only
+        jsr WrapDrawChar
+        inc xpos
+        jsr WrapDrawChar
+        inc ypos
+        jsr WrapDrawChar
+        dec xpos
+        jsr WrapDrawChar
+        dec chr_only
+        JMP .skip_car
+
+._L06   inc chr_only
+        ldx #$00
+        LDA PASSED_CARS_CHAR_TBL,X
+        jsr WrapDrawChar
+
+        inx
+        LDA PASSED_CARS_CHAR_TBL,X
+        inc xpos
+        jsr WrapDrawChar
+
+        inx
+        LDA PASSED_CARS_CHAR_TBL,X
+        inc ypos
+        dec xpos
+        jsr WrapDrawChar
+
+        inx
+        LDA PASSED_CARS_CHAR_TBL,X
+        inc xpos
+        jsr WrapDrawChar
+
+        dec chr_only
+
+        ;DEX
+        ;BPL ._L05
+
+
+.skip_car:
         DEY
-        BPL ._L04
+        BPL ._L04       ; next passed car
 
         LDA ZP_ADD_1000_PTS
         BEQ ._L10
@@ -3838,8 +3874,22 @@ jF2FB
 ._L17   JMP IRQ_HANDLER_MAIN
 }
 
+WrapDrawChar:
+        phx
+        phy
+        ldx xpos
+        ldy ypos
+        jsr DrawChar
+        ply
+        plx
+        rts
+
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
         ; Screen location of where to print the passed cars
+PASSED_CARS_XPOS:
+        !byte 33, 35, 37, 33, 35, 37, 33, 35, 37
+PASSED_CARS_YPOS:
+        !byte 15, 15, 15, 17, 17, 17, 19, 19, 19
 PASSED_CARS_POS_LO:
         !byte <(SCREEN_RAM+40*16+33)
         !byte <(SCREEN_RAM+40*16+35)
@@ -4007,12 +4057,18 @@ GAME_OVER:
         BNE ._L06
 
         ; Erase "Extended time", in case it was on
-._L07   LDY #$07
+._L07   LDX #$07
         LDA #$20                        ;Space
-._L08   STA SCREEN_RAM+40*23+32,Y
-        STA SCREEN_RAM+40*24+32,Y
-        DEY
+        inc chr_only
+._L08   ldy #23
+        jsr DrawChar
+        ;STA SCREEN_RAM+40*23+32,Y
+        ldy #24
+        jsr DrawChar
+        ;STA SCREEN_RAM+40*24+32,Y
+        DEX
         BPL ._L08
+        dec chr_only
 
         LDY #$05
         JSR DELAY_00
