@@ -1942,7 +1942,7 @@ DRAW_ROAD_TOP_ROW:
         ply
 
         LDA #$44                        ;"Full" character
-._L01   jsr DrawChar  ; STA SCREEN_RAM,Y
+._L01   jsr DrawChar
 
         DEX
         BPL ._L01
@@ -2288,14 +2288,54 @@ DRAW_SPLIT_SCREEN:
         BNE ._L02
 
         ; PATTERN_CHOOSER == 0
+        inc chr_only
+        lda #00
+        sta ypos
+
         LDA SHOULDER_PATTERN_LEFT_A,Y
-        STA SCREEN_RAM+4,Y              ;Left road, left shoulder
+        sta char_value
+
+        tya
+        clc
+        adc #4
+        sta xpos
+        lda char_value
+        jsr WrapDrawChar
+        ;STA SCREEN_RAM+4,Y              ;Left road, left shoulder
+
         LDA SHOULDER_PATTERN_LEFT_A+4,Y
-        STA SCREEN_RAM+16,Y             ;Right road, left shoulder
+        sta char_value
+
+        tya
+        clc
+        adc #16
+        sta xpos
+        lda char_value
+        jsr WrapDrawChar
+        ;STA SCREEN_RAM+16,Y             ;Right road, left shoulder
+
         LDA SHOULDER_PATTERN_RIGHT_A+12,Y
-        STA SCREEN_RAM+12,Y             ;Left road, right shoulder
+        sta char_value
+
+        tya
+        clc
+        adc #12
+        sta xpos
+        lda char_value
+        jsr WrapDrawChar
+        ;STA SCREEN_RAM+12,Y             ;Left road, right shoulder
+
         LDA SHOULDER_PATTERN_RIGHT_A,Y
-        STA SCREEN_RAM+25,Y             ;Right road, right shoulder
+        sta char_value
+
+        tya
+        clc
+        adc #25
+        sta xpos
+        lda char_value
+        jsr WrapDrawChar
+        ;STA SCREEN_RAM+25,Y             ;Right road, right shoulder
+        lda char_value
         BNE ._L03
 
 
@@ -4011,9 +4051,16 @@ GAME_OVER:
 
         LDY #31                         ;32 columns
 ._L03   LDA RACE_OVER_BOTTOM_ROW_BANNER,Y
-        STA SCREEN_RAM,Y
-        LDA #$0A                        ;Color Light Red
-        STA COLOR_RAM,Y
+        phy
+        sty xpos
+        ldx xpos
+        ldy #$00
+        ldz #$0a ; light red
+        jsr DrawChar
+        ply
+        ;STA SCREEN_RAM,Y
+        ;LDA #$0A                        ;Color Light Red
+        ;STA COLOR_RAM,Y
         DEY
         BPL ._L03
 
@@ -4022,7 +4069,14 @@ GAME_OVER:
 
         LDY #31                         ;32 columns
 ._L04   LDA RACE_OVER_TOP_ROW_BANNER,Y
-        STA SCREEN_RAM,Y
+        phy
+        sty xpos
+        ldx xpos
+        ldy #$00
+        ldz #$0a
+        jsr DrawChar
+        ply
+        ;STA SCREEN_RAM,Y
         DEY
         BPL ._L04
 
