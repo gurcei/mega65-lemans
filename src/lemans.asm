@@ -755,9 +755,13 @@ INIT_GAME:
         ; Print Start bottom row
         LDY #$1F
 ._L03   LDA START_BOTTOM_ROW_BANNER,Y
-        STA SCREEN_RAM,Y
-        LDA #$0A                        ;Color Light Red
-        STA COLOR_RAM,Y
+        phy
+        sty xpos
+        ldx xpos
+        ldy #$00
+        ldz #$0a        ; light red
+        jsr DrawChar
+        ply
         DEY
         BPL ._L03
         BMI ._L11
@@ -769,9 +773,13 @@ _PRINT_TRAFFICLIGHT_BOTTOM
         AND #$01
         CLC
         ADC #$2D                        ;Traffic light bottom-left char
-        STA SCREEN_RAM+4,Y
-        LDA #$08                        ;Color Orange
-        STA COLOR_RAM+4,Y
+        phy
+        sty xpos
+        ldx xpos
+        ldy #$00
+        ldz #$08        ; orange
+        jsr DrawChar
+        ply
         DEY
         BPL ._L05
         BMI ._L11
@@ -783,9 +791,13 @@ _PRINT_TRAFFICLIGHT_TOP
         AND #$01
         CLC
         ADC #$2B                        ;Traffic light top-left char
-        STA SCREEN_RAM+4,Y
-        LDA #$08                        ;Color Orange
-        STA COLOR_RAM+4,Y
+        phy
+        sty xpos
+        ldx xpos
+        ldy #$00
+        ldz #$08        ; orange
+        jsr DrawChar
+        ply
         DEY
         BPL ._L07
         BMI ._L11
@@ -793,9 +805,13 @@ _PRINT_TRAFFICLIGHT_TOP
 _PRINT_START_TOP
         LDY #$1F
 ._L09   LDA START_TOP_ROW_BANNER,Y
-        STA SCREEN_RAM,Y
-        LDA #$0A                        ;Color Light Red
-        STA COLOR_RAM,Y
+        phy
+        sty xpos
+        ldx xpos
+        ldy #$00
+        ldz #$0a        ; light red
+        jsr DrawChar
+        ply
         DEY
         BPL ._L09
         BMI ._L11
@@ -869,22 +885,52 @@ _PRINT_START_TOP
         ; Print "trafficlight" background color
         LDA #$08                        ;Orange
         LDY #$07                        ;Number of columns to print
-._L14   STA COLOR_RAM+40*14+4,Y
-        STA COLOR_RAM+40*15+4,Y
+        ldx #04
+        stx xpos
+
+._L14   inc clr_only
+        taz     ; clr
+        phx
+        phy
+        
+        ldy #14
+        jsr WrapDrawCharAddY
+        ;STA COLOR_RAM+40*14+4,Y
+        ldy #15
+        jsr WrapDrawCharAddY
+        ;STA COLOR_RAM+40*15+4,Y
+
+        ply
+        plx
+        dec clr_only
+
         DEY
         BPL ._L14
 
-        LDA TRAFFICLIGHT_COLOR_RAM_POS_LO,X
-        STA ZP_TMP_PTR_LO
-        LDA TRAFFICLIGHT_COLOR_RAM_POS_HI,X
-        STA ZP_TMP_PTR_HI
+        ; LDA TRAFFICLIGHT_COLOR_RAM_POS_LO,X
+        ; STA ZP_TMP_PTR_LO
+        ; LDA TRAFFICLIGHT_COLOR_RAM_POS_HI,X
+        ; STA ZP_TMP_PTR_HI
+        ldx ZP_LEVEL_IDX
+        lda TRAFFICLIGHT_XPOS,X
+        sta xpos
+        lda #14
+        sta ypos
 
+lights:
         LDA TRAFFICLIGHT_COLOR_TBL,X
-        LDX #$03
-._L15   LDY TWO_BY_TWO_OFFSET_TBL,X
-        STA (ZP_TMP_PTR_LO),Y
-        DEX
-        BPL ._L15
+        taz
+
+        inc clr_only
+        jsr WrapDrawCharAddY
+        inc xpos
+        jsr WrapDrawCharAddY
+        inc ypos
+        jsr WrapDrawCharAddY
+        dec xpos
+        jsr WrapDrawCharAddY
+        dec clr_only
+        ;STA (ZP_TMP_PTR_LO),Y
 
         LDY #$0A
         JSR DELAY_01
@@ -915,22 +961,46 @@ _PRINT_START_TOP
         JMP MAIN_LOOP
 }
 
+WrapDrawCharAddY:
+        pha
+        phx
+        phy
+
+        sta char_value
+
+        tya
+        clc
+        adc xpos
+        tax
+
+        ldy ypos
+
+        lda char_value
+        jsr DrawChar
+        
+        ply
+        plx
+        pla
+        rts
+
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
-TRAFFICLIGHT_COLOR_RAM_POS_LO
+TRAFFICLIGHT_XPOS:
+        !byte 10, 8, 6, 4
+TRAFFICLIGHT_COLOR_RAM_POS_LO:
         !byte <(COLOR_RAM+40*14+10)
         !byte <(COLOR_RAM+40*14+8)
         !byte <(COLOR_RAM+40*14+6)
         !byte <(COLOR_RAM+40*14+4)
-TRAFFICLIGHT_COLOR_RAM_POS_HI
+TRAFFICLIGHT_COLOR_RAM_POS_HI:
         !byte >(COLOR_RAM+40*14+10)
         !byte >(COLOR_RAM+40*14+8)
         !byte >(COLOR_RAM+40*14+6)
         !byte >(COLOR_RAM+40*14+4)
-TRAFFICLIGHT_COLOR_TBL
+TRAFFICLIGHT_COLOR_TBL:
         !byte $0B,$0F,$0A,$0A           ;Dark Grey, Light Grey, Light Red, Light Red
-TRAFFICLIGHT_SID_FREQ_TBL
+TRAFFICLIGHT_SID_FREQ_TBL:
         !byte $59,$2C,$2C,$2C
-TRAFFICLIGHT_SID_CONTROL_TBL
+TRAFFICLIGHT_SID_CONTROL_TBL:
         !byte $10,$00,$00,$00
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
@@ -1299,7 +1369,6 @@ INIT_SCREEN:
         ply
         plx
         dec chr_only
-       ; STA (ZP_TMP_PTR_LO),Y
         DEY
         BPL ._L05
 
@@ -1339,7 +1408,6 @@ INIT_SCREEN:
         ply
         plx
         dec chr_only
-        ;STA (ZP_TMP_PTR_LO),Y
 
         DEY
         BPL ._L09
@@ -1355,7 +1423,6 @@ INIT_SCREEN:
         LDZ #$0E                        ;Color Light Blue
 ._L13   LDA #$44  ; full char
         jsr DrawChar
-        ;STA (ZP_TMP_PTR_LO),Y
         DEX
         CPX #07
         BPL ._L13
@@ -2101,7 +2168,7 @@ DRAW_SHOULDERS:
         inc clr_only
         lda #$01
         sta ZP_TMP_PTR_LO
-        jsr WrapDrawCharTopLine  ;  sta clr_value  ; STA COLOR_RAM+1,Y
+        jsr WrapDrawCharTopLine
         dec clr_only
 
         INY
@@ -2131,7 +2198,7 @@ DRAW_SHOULDERS:
 
 ._L03   LDA SHOULDER_PATTERN_LEFT_B,X
 ._L04   inc chr_only
-        jsr WrapDrawCharTopLine  ; STA (ZP_TMP_PTR_LO),Y
+        jsr WrapDrawCharTopLine
         dec chr_only
         INX
         INY
@@ -2159,7 +2226,7 @@ DRAW_SHOULDERS:
         BNE ._L07
 ._L06   LDA SHOULDER_PATTERN_RIGHT_B,X
 ._L07   inc chr_only
-        jsr WrapDrawCharTopLine  ; STA (ZP_TMP_PTR_LO),Y
+        jsr WrapDrawCharTopLine
         dec chr_only
 
         INX
