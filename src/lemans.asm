@@ -348,7 +348,7 @@ IRQ_HANDLER_MAIN:
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 VIC_VALUES:
-        !byte $18                       ;$D011 - Text, 24-rows
+        !byte $10                       ;$D011 - Text, 24-rows
         !byte $00                       ;$D012 - Raster
         !byte $00                       ;$D013 - Latch X
         !byte $00                       ;$D014 - Latch Y
@@ -1931,9 +1931,9 @@ DRAW_ROAD_TOP_ROW:
         BEQ ._L00
         DEC ZP_HEADLIGHT_DURATION
 
-        LDY #$00
         ; Paint top row with "full" characters
-._L00   LDX #31                         ;32 columns
+._L00   LDY #$00
+        LDX #31                         ;32 columns
         
         phy
         LDY ZP_ROAD_STATE
