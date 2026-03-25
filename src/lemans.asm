@@ -750,7 +750,7 @@ INIT_GAME:
         CPX #200
         BEQ _PRINT_TRAFFICLIGHT_TOP
         CPX #203
-        BNE ._L10
+        LBNE ._L10
 
         ; Print Start bottom row
         LDY #$1F
@@ -775,6 +775,10 @@ _PRINT_TRAFFICLIGHT_BOTTOM
         ADC #$2D                        ;Traffic light bottom-left char
         phy
         sty xpos
+        inc xpos
+        inc xpos
+        inc xpos
+        inc xpos
         ldx xpos
         ldy #$00
         ldz #$08        ; orange
@@ -793,6 +797,10 @@ _PRINT_TRAFFICLIGHT_TOP
         ADC #$2B                        ;Traffic light top-left char
         phy
         sty xpos
+        inc xpos
+        inc xpos
+        inc xpos
+        inc xpos
         ldx xpos
         ldy #$00
         ldz #$08        ; orange
@@ -882,25 +890,26 @@ _PRINT_START_TOP
         LDA #$11
         STA $D40B                       ;Voice 2: Control Register
 
+traffic:
         ; Print "trafficlight" background color
         LDA #$08                        ;Orange
         LDY #$07                        ;Number of columns to print
         ldx #04
         stx xpos
+        taz     ; clr
 
 ._L14   inc clr_only
-        taz     ; clr
         phx
-        phy
         
-        ldy #14
+        lda #14
+        sta ypos
         jsr WrapDrawCharAddY
         ;STA COLOR_RAM+40*14+4,Y
-        ldy #15
+        lda #15
+        sta ypos
         jsr WrapDrawCharAddY
         ;STA COLOR_RAM+40*15+4,Y
 
-        ply
         plx
         dec clr_only
 
@@ -921,6 +930,7 @@ lights:
         LDA TRAFFICLIGHT_COLOR_TBL,X
         taz
 
+        ldy #$00
         inc clr_only
         jsr WrapDrawCharAddY
         inc xpos
@@ -965,6 +975,7 @@ WrapDrawCharAddY:
         pha
         phx
         phy
+        phz
 
         sta char_value
 
@@ -978,6 +989,7 @@ WrapDrawCharAddY:
         lda char_value
         jsr DrawChar
         
+        plz
         ply
         plx
         pla
