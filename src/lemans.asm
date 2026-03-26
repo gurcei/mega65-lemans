@@ -2278,9 +2278,21 @@ WrapDrawCharTopLine:
 !zone {
 DRAW_SPLIT_SCREEN:
         LDY #$05
-        LDA #$0E                        ;Color Light Blue
-._L00   STA COLOR_RAM+7,Y
-        STA COLOR_RAM+19,Y
+        LDZ #$0E                        ;Color Light Blue
+
+        lda #00
+        sta ypos
+
+._L00   inc clr_only
+        lda #07
+        sta xpos
+        jsr WrapDrawCharAddY
+        ;STA COLOR_RAM+7,Y
+        lda #19
+        sta xpos
+        jsr WrapDrawCharAddY
+        ;STA COLOR_RAM+19,Y
+        dec clr_only
         DEY
         BPL ._L00
 
@@ -2342,16 +2354,51 @@ DRAW_SPLIT_SCREEN:
 
         ; PATTERN_CHOOSER != 0
 ._L02   LDA SHOULDER_PATTERN_LEFT_B,Y
-        STA SCREEN_RAM+4,Y              ;Left road, Left shoulder
+        sta char_value
+
+        tya
+        clc
+        adc #04
+        sta xpos
+        lda char_value
+        jsr WrapDrawChar
+        ;STA SCREEN_RAM+4,Y              ;Left road, Left shoulder
+
         LDA SHOULDER_PATTERN_LEFT_B+4,Y
-        STA SCREEN_RAM+16,Y             ;Right road, Left shoulder
+        sta char_value
+
+        tya
+        clc
+        adc #16
+        sta xpos
+        lda char_value
+        jsr WrapDrawChar
+        ;STA SCREEN_RAM+16,Y             ;Right road, Left shoulder
+
         LDA SHOULDER_PATTERN_RIGHT_B+12,Y
-        STA SCREEN_RAM+12,Y             ;Left road, right shoulder
+        sta char_value
+
+        tya
+        clc
+        adc #12
+        sta xpos
+        lda char_value
+        jsr WrapDrawChar
+        ;STA SCREEN_RAM+12,Y             ;Left road, right shoulder
+
         LDA SHOULDER_PATTERN_RIGHT_B,Y
-        STA SCREEN_RAM+25,Y             ;Right road, right shoulder
+        sta char_value
+
+        tya
+        clc
+        adc #25
+        sta xpos
+        lda char_value
+        jsr WrapDrawChar
+        ;STA SCREEN_RAM+25,Y             ;Right road, right shoulder
 
 ._L03   DEY
-        BPL ._L01
+        LBPL ._L01
 
         LDA #56
         STA ZP_ROAD_X_LEFT_ROW_TBL
@@ -3891,12 +3938,25 @@ jF2FB
 
         ; Print "BONUS 1000 PTS" message
 ._L08   LDY #$07
-._L09   LDA BONUS_MSG,Y
-        STA SCREEN_RAM+40*23+32,Y
+._L09   inc chr_only
+        lda #23
+        sta ypos
+        lda #32
+        sta xpos
+        LDA BONUS_MSG,Y
+        jsr WrapDrawCharAddY
+        ; STA SCREEN_RAM+40*23+32,Y
+
+        lda #24
+        sta ypos
         LDA THOUSAND_PTS_MSG,Y
-        STA SCREEN_RAM+40*24+32,Y
+        jsr WrapDrawCharAddY
+        ;STA SCREEN_RAM+40*24+32,Y
+        dec chr_only
+
         DEY
         BPL ._L09
+
 
 ._L10   LDA ZP_DISPLAY_1000_PTS_DURATION
         BEQ ._L13
@@ -3916,8 +3976,21 @@ jF2FB
         ; Erase "BONUS 1000 PTS" message
         LDY #$07
         LDA #$20
-._L12   STA SCREEN_RAM+40*23+32,Y
-        STA SCREEN_RAM+40*24+32,Y
+        sta char_value
+._L12   inc chr_only
+        lda #23
+        sta ypos
+        lda #32
+        sta xpos
+        lda char_value
+        jsr WrapDrawCharAddY
+        ;STA SCREEN_RAM+40*23+32,Y
+        lda #24
+        sta ypos
+        lda char_value
+        jsr WrapDrawCharAddY
+        ;STA SCREEN_RAM+40*24+32,Y
+        dec chr_only
         DEY
         BPL ._L12
 
@@ -3933,10 +4006,21 @@ jF2FB
 
         ; Print "EXTENDED TIME" message
         LDY #$07
-._L14   LDA EXTENDED_MSG,Y
-        STA SCREEN_RAM+40*14+32,Y
+._L14   inc chr_only
+        lda #32
+        sta xpos
+        lda #14
+        sta ypos
+        LDA EXTENDED_MSG,Y
+        jsr WrapDrawCharAddY
+        ;STA SCREEN_RAM+40*14+32,Y
+
+        lda #15
+        sta ypos
         LDA TIME2_MSG,Y
-        STA SCREEN_RAM+40*15+32,Y
+        jsr WrapDrawCharAddY
+        ;STA SCREEN_RAM+40*15+32,Y
+        dec chr_only
         DEY
         BPL ._L14
         BMI ._L17
@@ -3946,8 +4030,21 @@ jF2FB
         STA ZP_PLAY_EXTENDED_TIME_SOUND
         LDY #$07
         LDA #$20
-._L16   STA SCREEN_RAM+40*14+32,Y
-        STA SCREEN_RAM+40*15+32,Y
+._L16   inc chr_only
+        
+        lda #32
+        sta xpos
+        lda #14
+        sta ypos
+        lda #$20
+        jsr WrapDrawCharAddY
+        ;STA SCREEN_RAM+40*14+32,Y
+        lda #15
+        sta ypos
+        lda #$20
+        jsr WrapDrawCharAddY
+        ;STA SCREEN_RAM+40*15+32,Y
+        dec chr_only
         DEY
         BPL ._L16
 
