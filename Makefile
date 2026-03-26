@@ -58,7 +58,7 @@ d64: intro-exo
 	$(C1541) $(D64_IMAGE) -list
 
 run: lemans
-	$(XEMU) -uartmon :4510 -prg bin/lemans.prg &
+	$(XEMU) -allowmousegrab -uartmon :4510 -prg bin/lemans.prg &
 
 debug: lemans-lia-exo
 	$(DEBUGGER) -d64 $(D64_IMAGE) -symbols bin/labels.txt

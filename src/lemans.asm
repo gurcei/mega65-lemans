@@ -338,6 +338,7 @@ IRQ_HANDLER_MAIN:
 
         LDA $DC0D                       ;CIA1: CIA Interrupt Control Register
 
+irq_bailout:
         PLA
         TAY
         PLA
@@ -2428,9 +2429,40 @@ ROAD_TURN_TBL:
         !byte $02,$02,$02,$01,$01,$01,$00,$00
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
+throttle_counter !word $0000
+THRESHOLD = $3400
+
+TickThrottle:
+    inc throttle_counter
+    lda throttle_counter
+    bne +
+    inc throttle_counter + 1
+
++:
+    lda throttle_counter
+    cmp #<THRESHOLD
+    bne .no_update
+    lda throttle_counter + 1
+    cmp #>THRESHOLD
+    bne .no_update
+
+    lda #0
+    sta throttle_counter
+    sta throttle_counter+1
+    sec              ; signal: run update
+    rts
+
+.no_update:
+    clc              ; signal: skip update
+    rts
+
+;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 ; Not 100% sure that is the the main loop, but looks like it
 !zone {
 MAIN_LOOP:
+        jsr TickThrottle
+        bcc MAIN_LOOP
+
         LDA ZP_SPEED_LO
         BNE ._L00
         LDA ZP_SPEED_HI
@@ -2931,6 +2963,14 @@ INCREMENT_SCORE:
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 !zone {
 IRQ_HANDLER_GAME_LOOP:
+;         jsr TickThrottle
+;         bcs +
+;         LDA $DC0D                       ;CIA1: CIA Interrupt Control Register
+;         jmp irq_bailout
+; 
+; +:
+;         clc
+
         LDA ZP_GAME_OVER_STATE
         BEQ ._L00
 
