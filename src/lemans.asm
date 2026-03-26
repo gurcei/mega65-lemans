@@ -311,6 +311,15 @@ IRQ_HANDLER
         PHA
         TYA
         PHA
+
+        lda chr_only    ; preserve flags prior to interrupt
+        pha
+        lda clr_only
+        pha
+        lda #$00
+        sta chr_only
+        sta clr_only
+
         JMP (ZP_IRQ_LO)
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
@@ -339,6 +348,11 @@ IRQ_HANDLER_MAIN:
         LDA $DC0D                       ;CIA1: CIA Interrupt Control Register
 
 irq_bailout:
+        pla
+        sta clr_only
+        pla
+        sta chr_only    ; preserve flags prior to interrupt
+
         PLA
         TAY
         PLA
@@ -2348,12 +2362,17 @@ DRAW_SPLIT_SCREEN:
         lda char_value
         jsr WrapDrawChar
         ;STA SCREEN_RAM+25,Y             ;Right road, right shoulder
+        dec chr_only
         lda char_value
         BNE ._L03
 
 
         ; PATTERN_CHOOSER != 0
-._L02   LDA SHOULDER_PATTERN_LEFT_B,Y
+._L02   inc chr_only
+        lda #00
+        sta ypos
+
+        LDA SHOULDER_PATTERN_LEFT_B,Y
         sta char_value
 
         tya
@@ -2396,6 +2415,8 @@ DRAW_SPLIT_SCREEN:
         lda char_value
         jsr WrapDrawChar
         ;STA SCREEN_RAM+25,Y             ;Right road, right shoulder
+
+        dec chr_only
 
 ._L03   DEY
         LBPL ._L01
@@ -4637,6 +4658,22 @@ DrawChar:
     phy
     phz
 
+    lda chr_only
+    cmp #02
+    bne +
+bug2:
+        jmp bug2
+
++
+    cmp #$00
+    beq +
+    lda clr_only
+    beq +
+
+bug:
+        jmp bug
+
++
         ; prepare CLR_PTR
         lda #^COLOUR_BASE
         sta CLR_PTR2
