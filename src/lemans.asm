@@ -21,7 +21,14 @@ DST_DEC = 32
 MULTINA = $d770
 MULTINB = $d774
 MULTOUT = $d778
+MULDIVBUSY = $d70f
 
+!macro WAIT_MUL_FINISH {
+@wait_for_mult_to_finish:
+    bit MULDIVBUSY  ; bit6 (mulbusy) = overflow flag
+                    ; bit7 (divbusy) = negative flag
+    bvs @wait_for_mult_to_finish
+}
 !macro multiply16 .in1, .in2, .out {
 	phz
         phy
@@ -35,6 +42,8 @@ MULTOUT = $d778
 	ldx .in2+1
 	lda .in2
 	stq MULTINB
+
+        +WAIT_MUL_FINISH
 
 	ldq MULTOUT
 	stx .out+1
@@ -56,6 +65,8 @@ MULTOUT = $d778
 
 	lda .in2
 	stq MULTINB
+
+        +WAIT_MUL_FINISH
 
 	ldq MULTOUT
 	stx .out+1
@@ -305,12 +316,11 @@ HI_SCORE_OFFSET = SCREEN_RAM + 40 * 8 + 32
 BEGIN
         jmp START
 
-IRQ_HANDLER
+IRQ_HANDLER:
         PHA
-        TXA
-        PHA
-        TYA
-        PHA
+        PHX
+        PHY
+        PHZ
 
         lda chr_only    ; preserve flags prior to interrupt
         pha
@@ -319,6 +329,38 @@ IRQ_HANDLER
         lda #$00
         sta chr_only
         sta clr_only
+        lda tmp_row_lo
+        pha
+        lda tmp_row_hi
+        pha
+        lda in1
+        pha
+        lda in2
+        pha
+        lda ZP_TMP_PTR_LO
+        pha
+        lda ZP_TMP_PTR_HI
+        pha
+        lda SCR_PTR0
+        pha
+        lda SCR_PTR1
+        pha
+        lda CLR_PTR0
+        pha
+        lda CLR_PTR1
+        pha
+        lda CLR_PTR2
+        pha
+        lda CLR_PTR3
+        pha
+        lda dma_src_addr
+        pha
+        lda dma_src_addr+1
+        pha
+        lda dma_dst_addr
+        pha
+        lda dma_dst_addr+1
+        pha
 
         JMP (ZP_IRQ_LO)
 
@@ -349,14 +391,50 @@ IRQ_HANDLER_MAIN:
 
 irq_bailout:
         pla
+        sta dma_dst_addr+1
+        pla
+        sta dma_dst_addr
+        pla
+        sta dma_src_addr+1
+        pla
+        sta dma_src_addr
+
+        pla
+        sta CLR_PTR3
+        pla
+        sta CLR_PTR2
+        pla
+        sta CLR_PTR1
+        pla
+        sta CLR_PTR0
+
+        pla
+        sta SCR_PTR1
+        pla
+        sta SCR_PTR0
+
+        pla
+        sta ZP_TMP_PTR_HI
+        pla
+        sta ZP_TMP_PTR_LO
+
+        pla
+        sta in2
+        pla
+        sta in1
+        pla
+        sta tmp_row_hi
+        pla
+        sta tmp_row_lo
+
+        pla
         sta clr_only
         pla
         sta chr_only    ; preserve flags prior to interrupt
 
-        PLA
-        TAY
-        PLA
-        TAX
+        PLZ
+        PLY
+        PLX
         PLA
         RTI
 }
@@ -1487,7 +1565,7 @@ FIRST_SRC_BYTE = $0400 + WIDTH*24 - 1
 FIRST_CLR_SRC_BYTE = $ff80000 + WIDTH*24 - 1
 
 VISIBLE_CHARS = 32
-ROW_BYTES     = VISIBLE_CHARS * 2   ; = 62
+ROW_BYTES     = VISIBLE_CHARS * 2   ; = 64
 FULL_WIDTH    = 80                  ; your WIDTH
 ROWS          = 24
 
@@ -1942,6 +2020,7 @@ DIGITS_DASHBOARD_BR_TBL
 ; Draw road (?)
 !zone {
 DRAW_ROAD_TOP_ROW:
+        SEI
         LDA ZP_HEADLIGHT_DURATION
         BEQ ._L00
         DEC ZP_HEADLIGHT_DURATION
@@ -2261,6 +2340,8 @@ DRAW_SHOULDERS:
         INY
         CPY #$04                        ;Draw 4 shoulder chars?
         BCC ._L05                       ;No, loop until we do so
+
+        CLI
 
         RTS
 }
@@ -4087,7 +4168,7 @@ WrapDrawChar:
 PASSED_CARS_XPOS:
         !byte 33, 35, 37, 33, 35, 37, 33, 35, 37
 PASSED_CARS_YPOS:
-        !byte 15, 15, 15, 17, 17, 17, 19, 19, 19
+        !byte 16, 16, 16, 18, 18, 18, 20, 20, 20
 PASSED_CARS_POS_LO:
         !byte <(SCREEN_RAM+40*16+33)
         !byte <(SCREEN_RAM+40*16+35)
