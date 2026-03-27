@@ -703,6 +703,7 @@ INIT_GAME:
 
         LDX #$00
         LDX BonusState
+        LDX ExtendedState
 
         STX ZP_SCORE_01
         STX ZP_SCORE_02
@@ -2627,6 +2628,26 @@ HandleBonusState:
 +:
         rts
 
+HandleExtendedState:
+        lda ExtendedState
+        cmp #ST_EXTENDED_IDLE
+        bne +
+        rts
++:
+        cmp #ST_EXTENDED_SHOW
+        bne +
+        jsr PrintExtendedMessage
+        rts
+
++:
+        cmp #ST_EXTENDED_ERASE
+        bne +
+        jsr EraseExtendedMessage
+        rts
+
++:
+        rts
+
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 ; Not 100% sure that is the the main loop, but looks like it
 !zone {
@@ -2635,6 +2656,7 @@ MAIN_LOOP:
         bcc MAIN_LOOP
 
         jsr HandleBonusState
+        jsr HandleExtendedState
 
         LDA ZP_SPEED_LO
         BNE ._L00
@@ -3901,10 +3923,14 @@ ACCELERATION_TBL_HI:
         !byte $03,$01,$00,$00
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
-BonusState !byte $00    ; 0 = idle, 1 = show, 2 = erase
+BonusState !byte $00
         ST_BONUS_IDLE  = 0
         ST_BONUS_SHOW  = 1
         ST_BONUS_ERASE = 2
+ExtendedState !byte $00
+        ST_EXTENDED_IDLE  = 0
+        ST_EXTENDED_SHOW  = 1
+        ST_EXTENDED_ERASE = 2
 
 ; Check for passed cars (?)
 !zone {
@@ -4101,33 +4127,25 @@ jF2FB
         LDA #$01
         STA ZP_PLAY_EXTENDED_TIME_SOUND
 
-        ; Print "EXTENDED TIME" message
-        LDY #$07
-._L14   inc chr_only
-        lda #32
-        sta xpos
-        lda #14
-        sta ypos
-        LDA EXTENDED_MSG,Y
-        jsr WrapDrawCharAddY
-        ;STA SCREEN_RAM+40*14+32,Y
-
-        lda #15
-        sta ypos
-        LDA TIME2_MSG,Y
-        jsr WrapDrawCharAddY
-        ;STA SCREEN_RAM+40*15+32,Y
-        dec chr_only
-        DEY
-        BPL ._L14
-        BMI ._L17
+        lda #ST_EXTENDED_SHOW
+        sta ExtendedState
+        ;jsr PrintExtendedMessage
+        jmp ._L17
 
         ; Erase "EXTENDED TIME" message
-._L15   LDA #$00
+._L15   lda #ST_EXTENDED_ERASE
+        sta ExtendedState
+        ;jsr EraseExtendedMessage
+
+._L17   JMP IRQ_HANDLER_MAIN
+}
+
+EraseExtendedMessage:
+        LDA #$00
         STA ZP_PLAY_EXTENDED_TIME_SOUND
         LDY #$07
         LDA #$20
-._L16   inc chr_only
+-       inc chr_only
         
         lda #32
         sta xpos
@@ -4143,10 +4161,30 @@ jF2FB
         ;STA SCREEN_RAM+40*15+32,Y
         dec chr_only
         DEY
-        BPL ._L16
+        BPL -
+        RTS
 
-._L17   JMP IRQ_HANDLER_MAIN
-}
+PrintExtendedMessage:
+        ; Print "EXTENDED TIME" message
+        LDY #$07
+-       inc chr_only
+        lda #32
+        sta xpos
+        lda #14
+        sta ypos
+        LDA EXTENDED_MSG,Y
+        jsr WrapDrawCharAddY
+        ;STA SCREEN_RAM+40*14+32,Y
+
+        lda #15
+        sta ypos
+        LDA TIME2_MSG,Y
+        jsr WrapDrawCharAddY
+        ;STA SCREEN_RAM+40*15+32,Y
+        dec chr_only
+        DEY
+        BPL -
+        RTS
 
 PrintBonusMessage:
         LDY #$07
