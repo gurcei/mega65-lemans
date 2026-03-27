@@ -2672,6 +2672,18 @@ HandlePassedCarsState:
 
 +:
         rts
+
+PrintScoreTimeSpeed:
+        JSR PRINT_SCORE_AND_TIME
+
+        INC ZP_PRINT_SPEED_DELAY        ;Speed is displayed with a 7 frame delay
+        LDA ZP_PRINT_SPEED_DELAY
+        AND #$07
+        BNE +
+        JSR PRINT_SPEED
++:
+        RTS
+
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 ; Not 100% sure that is the the main loop, but looks like it
 !zone {
@@ -2682,6 +2694,7 @@ MAIN_LOOP:
         jsr HandleBonusState
         jsr HandleExtendedState
         jsr HandlePassedCarsState
+        jsr PrintScoreTimeSpeed
 
         LDA ZP_SPEED_LO
         BNE ._L00
@@ -3316,14 +3329,8 @@ _TEST_BUTTON
         LDA #$00
         STA ZP_SPEED_LO
         STA ZP_SPEED_HI
-._L10   CLD
-        JSR PRINT_SCORE_AND_TIME
-
-        INC ZP_PRINT_SPEED_DELAY        ;Speed is displayed with a 7 frame delay
-        LDA ZP_PRINT_SPEED_DELAY
-        AND #$07
-        BNE ._L11
-        JSR PRINT_SPEED
+._L10   ; this is where print score and time and speed used to be (moving to main)
+        CLD
 
         ; Converts speed from the range of [0,320] to [0,32]
         ; Basically divides by 10
