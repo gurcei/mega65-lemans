@@ -1252,6 +1252,7 @@ TITLE_ROWS_TBL
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 ; Delay based on ticks. Register Y is number of ticks to wait
 ; Uses ZP_TIMER0_TRIGGERED
+; GI: I think Y = the number of SECONDS you want to delay
 !zone {
 DELAY_00:
 ._L00
@@ -1268,6 +1269,7 @@ DELAY_00:
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 ; Delay based on ticks. Register Y is number of ticks to wait
 ; Uses ZP_TIMER1_TRIGGERED
+; GI: I think Y = the number of 1/60th sec ticks you want to delay
 !zone {
 DELAY_01:
 ._L00
@@ -2582,32 +2584,6 @@ ROAD_TURN_TBL:
         !byte $02,$02,$02,$01,$01,$01,$00,$00
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
-throttle_counter !word $0000
-THRESHOLD = $3400
-
-TickThrottle:
-    inc throttle_counter
-    lda throttle_counter
-    bne +
-    inc throttle_counter + 1
-
-+:
-    lda throttle_counter
-    cmp #<THRESHOLD
-    bne .no_update
-    lda throttle_counter + 1
-    cmp #>THRESHOLD
-    bne .no_update
-
-    lda #0
-    sta throttle_counter
-    sta throttle_counter+1
-    sec              ; signal: run update
-    rts
-
-.no_update:
-    clc              ; signal: skip update
-    rts
 
 HandleBonusState:
         lda BonusState
@@ -2688,8 +2664,10 @@ PrintScoreTimeSpeed:
 ; Not 100% sure that is the the main loop, but looks like it
 !zone {
 MAIN_LOOP:
-        jsr TickThrottle
-        bcc MAIN_LOOP
+        lda ZP_TIMER1_TRIGGERED
+        beq MAIN_LOOP
+        lda #$00
+        sta ZP_TIMER1_TRIGGERED
 
         jsr HandleBonusState
         jsr HandleExtendedState
@@ -3196,14 +3174,6 @@ INCREMENT_SCORE:
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 !zone {
 IRQ_HANDLER_GAME_LOOP:
-;         jsr TickThrottle
-;         bcs +
-;         LDA $DC0D                       ;CIA1: CIA Interrupt Control Register
-;         jmp irq_bailout
-; 
-; +:
-;         clc
-
         LDA ZP_GAME_OVER_STATE
         BEQ ._L00
 
