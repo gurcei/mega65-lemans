@@ -702,6 +702,8 @@ INIT_GAME:
         CLI
 
         LDX #$00
+        LDX BonusState
+
         STX ZP_SCORE_01
         STX ZP_SCORE_02
         STX ZP_SCORE_03
@@ -2020,7 +2022,7 @@ DIGITS_DASHBOARD_BR_TBL
 ; Draw road (?)
 !zone {
 DRAW_ROAD_TOP_ROW:
-        SEI
+        ;SEI
         LDA ZP_HEADLIGHT_DURATION
         BEQ ._L00
         DEC ZP_HEADLIGHT_DURATION
@@ -2341,7 +2343,7 @@ DRAW_SHOULDERS:
         CPY #$04                        ;Draw 4 shoulder chars?
         BCC ._L05                       ;No, loop until we do so
 
-        CLI
+        ;CLI
 
         RTS
 }
@@ -2605,12 +2607,34 @@ TickThrottle:
     clc              ; signal: skip update
     rts
 
+HandleBonusState:
+        lda BonusState
+        cmp #ST_BONUS_IDLE
+        bne +
+        rts
++:
+        cmp #ST_BONUS_SHOW
+        bne +
+        jsr PrintBonusMessage
+        rts
+
++:
+        cmp #ST_BONUS_ERASE
+        bne +
+        jsr EraseBonusMessage
+        rts
+
++:
+        rts
+
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 ; Not 100% sure that is the the main loop, but looks like it
 !zone {
 MAIN_LOOP:
         jsr TickThrottle
         bcc MAIN_LOOP
+
+        jsr HandleBonusState
 
         LDA ZP_SPEED_LO
         BNE ._L00
@@ -3877,6 +3901,11 @@ ACCELERATION_TBL_HI:
         !byte $03,$01,$00,$00
 
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
+BonusState !byte $00    ; 0 = idle, 1 = show, 2 = erase
+        ST_BONUS_IDLE  = 0
+        ST_BONUS_SHOW  = 1
+        ST_BONUS_ERASE = 2
+
 ; Check for passed cars (?)
 !zone {
 jF2FB
@@ -4039,26 +4068,9 @@ jF2FB
         STA ZP_TIMES_TO_DISPLAY_EXTENDED_TIME
 
         ; Print "BONUS 1000 PTS" message
-._L08   LDY #$07
-._L09   inc chr_only
-        lda #23
-        sta ypos
-        lda #32
-        sta xpos
-        LDA BONUS_MSG,Y
-        jsr WrapDrawCharAddY
-        ; STA SCREEN_RAM+40*23+32,Y
-
-        lda #24
-        sta ypos
-        LDA THOUSAND_PTS_MSG,Y
-        jsr WrapDrawCharAddY
-        ;STA SCREEN_RAM+40*24+32,Y
-        dec chr_only
-
-        DEY
-        BPL ._L09
-
+._L08   lda #ST_BONUS_SHOW
+        sta BonusState
+        ;jsr PrintBonusMessage
 
 ._L10   LDA ZP_DISPLAY_1000_PTS_DURATION
         BEQ ._L13
@@ -4075,26 +4087,9 @@ jF2FB
         LDA ZP_DISPLAY_1000_PTS_DURATION
         BNE ._L13
 
-        ; Erase "BONUS 1000 PTS" message
-        LDY #$07
-        LDA #$20
-        sta char_value
-._L12   inc chr_only
-        lda #23
-        sta ypos
-        lda #32
-        sta xpos
-        lda char_value
-        jsr WrapDrawCharAddY
-        ;STA SCREEN_RAM+40*23+32,Y
-        lda #24
-        sta ypos
-        lda char_value
-        jsr WrapDrawCharAddY
-        ;STA SCREEN_RAM+40*24+32,Y
-        dec chr_only
-        DEY
-        BPL ._L12
+        lda #ST_BONUS_ERASE
+        sta BonusState
+        ;jsr EraseBonusMessage
 
 ._L13   LDA ZP_TIMES_TO_DISPLAY_EXTENDED_TIME
         BEQ ._L17
@@ -4152,6 +4147,52 @@ jF2FB
 
 ._L17   JMP IRQ_HANDLER_MAIN
 }
+
+PrintBonusMessage:
+        LDY #$07
+-       inc chr_only
+        lda #23
+        sta ypos
+        lda #32
+        sta xpos
+        LDA BONUS_MSG,Y
+        jsr WrapDrawCharAddY
+        ; STA SCREEN_RAM+40*23+32,Y
+
+        lda #24
+        sta ypos
+        LDA THOUSAND_PTS_MSG,Y
+        jsr WrapDrawCharAddY
+        ;STA SCREEN_RAM+40*24+32,Y
+        dec chr_only
+
+        DEY
+        BPL -
+        RTS
+
+EraseBonusMessage:
+        ; Erase "BONUS 1000 PTS" message
+        LDY #$07
+        LDA #$20
+        sta char_value
+-       inc chr_only
+        lda #23
+        sta ypos
+        lda #32
+        sta xpos
+        lda char_value
+        jsr WrapDrawCharAddY
+        ;STA SCREEN_RAM+40*23+32,Y
+        lda #24
+        sta ypos
+        lda char_value
+        jsr WrapDrawCharAddY
+        ;STA SCREEN_RAM+40*24+32,Y
+        dec chr_only
+        DEY
+        BPL -
+        RTS
+
 
 WrapDrawChar:
         phx
