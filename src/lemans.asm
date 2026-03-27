@@ -704,6 +704,7 @@ INIT_GAME:
         LDX #$00
         LDX BonusState
         LDX ExtendedState
+        LDX PassedCarsState
 
         STX ZP_SCORE_01
         STX ZP_SCORE_02
@@ -2617,12 +2618,16 @@ HandleBonusState:
         cmp #ST_BONUS_SHOW
         bne +
         jsr PrintBonusMessage
+        lda #ST_BONUS_IDLE
+        sta BonusState
         rts
 
 +:
         cmp #ST_BONUS_ERASE
         bne +
         jsr EraseBonusMessage
+        lda #ST_BONUS_IDLE
+        sta BonusState
         rts
 
 +:
@@ -2637,17 +2642,36 @@ HandleExtendedState:
         cmp #ST_EXTENDED_SHOW
         bne +
         jsr PrintExtendedMessage
+        lda #ST_EXTENDED_IDLE
+        sta ExtendedState
         rts
 
 +:
         cmp #ST_EXTENDED_ERASE
         bne +
         jsr EraseExtendedMessage
+        lda #ST_EXTENDED_IDLE
+        sta ExtendedState
         rts
 
 +:
         rts
 
+HandlePassedCarsState:
+        lda PassedCarsState
+        cmp #ST_PASSEDCARS_IDLE
+        bne +
+        rts
++:
+        cmp #ST_PASSEDCARS_SHOW
+        bne +
+        jsr DrawPassedCars
+        lda #ST_PASSEDCARS_IDLE
+        sta PassedCarsState
+        rts
+
++:
+        rts
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 ; Not 100% sure that is the the main loop, but looks like it
 !zone {
@@ -2657,6 +2681,7 @@ MAIN_LOOP:
 
         jsr HandleBonusState
         jsr HandleExtendedState
+        jsr HandlePassedCarsState
 
         LDA ZP_SPEED_LO
         BNE ._L00
@@ -3931,6 +3956,10 @@ ExtendedState !byte $00
         ST_EXTENDED_IDLE  = 0
         ST_EXTENDED_SHOW  = 1
         ST_EXTENDED_ERASE = 2
+PassedCarsState !byte $00
+        ST_PASSEDCARS_IDLE  = 0
+        ST_PASSEDCARS_SHOW  = 1
+
 
 ; Check for passed cars (?)
 !zone {
@@ -4007,61 +4036,9 @@ jF2FB
         BEQ ._L03
         JMP ._L13
 
-._L03   LDY #$08
-._L04   lda PASSED_CARS_XPOS,Y
-        sta xpos
-        lda PASSED_CARS_YPOS,Y
-        sta ypos
-        ;LDA PASSED_CARS_POS_LO,Y
-        ;STA ZP_SCREEN_PTR_LO
-        ;LDA PASSED_CARS_POS_HI,Y
-        ;STA ZP_SCREEN_PTR_HI
-        STY ZP_TMP_49
-
-._L05   CPY ZP_PASSED_CARS_TOTAL
-        BCC ._L06
-        LDA #$20                        ;Space
-        inc chr_only
-        jsr WrapDrawChar
-        inc xpos
-        jsr WrapDrawChar
-        inc ypos
-        jsr WrapDrawChar
-        dec xpos
-        jsr WrapDrawChar
-        dec chr_only
-        JMP .skip_car
-
-._L06   inc chr_only
-        ldx #$00
-        LDA PASSED_CARS_CHAR_TBL,X
-        jsr WrapDrawChar
-
-        inx
-        LDA PASSED_CARS_CHAR_TBL,X
-        inc xpos
-        jsr WrapDrawChar
-
-        inx
-        LDA PASSED_CARS_CHAR_TBL,X
-        inc ypos
-        dec xpos
-        jsr WrapDrawChar
-
-        inx
-        LDA PASSED_CARS_CHAR_TBL,X
-        inc xpos
-        jsr WrapDrawChar
-
-        dec chr_only
-
-        ;DEX
-        ;BPL ._L05
-
-
-.skip_car:
-        DEY
-        BPL ._L04       ; next passed car
+._L03   lda #ST_PASSEDCARS_SHOW
+        sta PassedCarsState
+        ;jsr DrawPassedCars
 
         LDA ZP_ADD_1000_PTS
         BEQ ._L10
@@ -4139,6 +4116,63 @@ jF2FB
 
 ._L17   JMP IRQ_HANDLER_MAIN
 }
+
+!zone {
+DrawPassedCars:
+        LDY #$08
+._L04   lda PASSED_CARS_XPOS,Y
+        sta xpos
+        lda PASSED_CARS_YPOS,Y
+        sta ypos
+        ;LDA PASSED_CARS_POS_LO,Y
+        ;STA ZP_SCREEN_PTR_LO
+        ;LDA PASSED_CARS_POS_HI,Y
+        ;STA ZP_SCREEN_PTR_HI
+        STY ZP_TMP_49
+
+._L05   CPY ZP_PASSED_CARS_TOTAL
+        BCC ._L06
+        LDA #$20                        ;Space
+        inc chr_only
+        jsr WrapDrawChar
+        inc xpos
+        jsr WrapDrawChar
+        inc ypos
+        jsr WrapDrawChar
+        dec xpos
+        jsr WrapDrawChar
+        dec chr_only
+        JMP .skip_car
+
+._L06   inc chr_only
+        ldx #$00
+        LDA PASSED_CARS_CHAR_TBL,X
+        jsr WrapDrawChar
+
+        inx
+        LDA PASSED_CARS_CHAR_TBL,X
+        inc xpos
+        jsr WrapDrawChar
+
+        inx
+        LDA PASSED_CARS_CHAR_TBL,X
+        inc ypos
+        dec xpos
+        jsr WrapDrawChar
+
+        inx
+        LDA PASSED_CARS_CHAR_TBL,X
+        inc xpos
+        jsr WrapDrawChar
+
+        dec chr_only
+
+.skip_car:
+        DEY
+        BPL ._L04       ; next passed car
+        RTS
+}
+
 
 EraseExtendedMessage:
         LDA #$00
