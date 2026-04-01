@@ -2660,6 +2660,28 @@ PrintScoreTimeSpeed:
 +:
         RTS
 
+HandleCollisionState:
+    lda CollisionState
+    beq +
+
+    cmp #ST_COLLISION_INIT
+    beq do_collision_init
+
+    cmp #ST_COLLISION_PHASE1
+    beq do_collision_phase1
+
+    cmp #ST_COLLISION_PHASE2
+    beq do_collision_phase2
+
+    cmp #ST_COLLISION_PHASE3
+    beq do_collision_phase3
+
+    cmp #ST_COLLISION_FINALISE
+    beq do_collision_finalise
+
++:
+    rts
+
 ;=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-;
 ; Not 100% sure that is the the main loop, but looks like it
 !zone {
@@ -2673,6 +2695,7 @@ MAIN_LOOP:
         jsr HandleExtendedState
         jsr HandlePassedCarsState
         jsr PrintScoreTimeSpeed
+        jsr HandleCollisionState
 
         LDA ZP_SPEED_LO
         BNE ._L00
@@ -2768,7 +2791,10 @@ MAIN_LOOP:
         STA ZP_SOUND_EFFECT_TO_PLAY     ;Play noise
         BNE ._L05
 
-._L04   JMP DO_COLLISION
+._L04   ;JMP DO_COLLISION
+        lda #ST_COLLISION_INIT
+        sta CollisionState
+        jmp MAIN_LOOP
 
 ._L05   LDA ZP_ROAD_STATE_ROW_TBL,Y
         CMP #$01
@@ -2801,7 +2827,11 @@ MAIN_LOOP:
         LDA #158
         CMP $D00E                       ;Sprite 7 X Pos
         BCC ._L07
-        JMP DO_COLLISION
+
+        ;JMP DO_COLLISION
+        lda #ST_COLLISION_INIT
+        sta CollisionState
+        jmp MAIN_LOOP
 
 ._L07   LDY ZP_PIXELS_TO_MOVE_CAR
 !if USE_JOYSTICK = 0 {
@@ -2902,7 +2932,11 @@ _TEST_RIGHT
 
 ._L14   LDA ZP_COLLISION_DETECTED
         BEQ ._L15
-        JMP DO_COLLISION
+
+        ;JMP DO_COLLISION
+        lda #ST_COLLISION_INIT
+        sta CollisionState
+        jmp MAIN_LOOP
 
 ._L15   JMP MAIN_LOOP
 }
@@ -3936,7 +3970,13 @@ ExtendedState !byte $00
 PassedCarsState !byte $00
         ST_PASSEDCARS_IDLE  = 0
         ST_PASSEDCARS_SHOW  = 1
-
+CollisionState !byte $00
+        ST_COLLISION_IDLE     = 0
+        ST_COLLISION_INIT     = 1
+        ST_COLLISION_PHASE1   = 2   ; scroll 35 rows
+        ST_COLLISION_PHASE2   = 3   ; slide car left into pit
+        ST_COLLISION_PHASE3   = 4   ; apply brakes and slow speed to zero
+        ST_COLLISION_FINALISE = 5   ; reset vars/io/sprites to suit return to default normal road
 
 ; Check for passed cars (?)
 !zone {
